@@ -331,6 +331,13 @@ def compose_report(ticker, hist):
     if not risk_lines:
         risk_lines.append("注意宏观与行业情绪变化可能放大波动。")
 
+    scenario_lines = [
+        "短线情景: 关注财报/宏观数据前后 1-3 日的波动放大与跳空风险，配合成交量与波动率变化判断情绪是否透支。",
+        "短线情景: 若价格突破近期区间高点并放量，可视作短线动能延续信号；若跌破区间低点并放量，视为短线转弱信号。",
+        "中长线情景: 关注数据中心收入增长、毛利率趋势与资本开支周期的持续性，若指引维持高增速则中长期叙事延续。",
+        "中长线情景: 若估值指标与增长预期出现显著背离（如增速下滑但估值抬升），中长期回撤风险上升。",
+    ]
+
     body = "\n".join([
         f"NVDA 每日简报 ({now_dt.strftime('%Y-%m-%d')} Sydney)",
         "",
@@ -345,6 +352,9 @@ def compose_report(ticker, hist):
         "",
         "[期权]",
         *options_lines,
+        "",
+        "[情景分析]",
+        *scenario_lines,
         "",
         "[风险提示]",
         *risk_lines,
