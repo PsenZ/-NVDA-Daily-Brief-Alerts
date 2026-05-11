@@ -4,16 +4,16 @@
       "breakout_entry": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$274.11 - $275.55",
-          "max_loss_pct": 0.42,
+          "entry_zone": "$293.28 - $294.90",
+          "max_loss_pct": 0.44,
           "position_pct": 10.0,
-          "stop": "$263.31",
-          "targets": "$292.11 / $303.63"
+          "stop": "$281.13",
+          "targets": "$313.53 / $326.49"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-05-01T04:07:22.360721+10:00",
-        "signal_hash": "5ba733e6358c"
+        "sent_at": "2026-05-12T01:46:19.283578+10:00",
+        "signal_hash": "4e982e28e2d7"
       },
       "pullback_add": {
         "channel": "entry",
@@ -34,16 +34,16 @@
       "breakout_entry": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$431.30 - $436.51",
+          "entry_zone": "$462.30 - $467.84",
           "max_loss_pct": 0.5,
-          "position_pct": 5.2,
-          "stop": "$392.22",
-          "targets": "$496.43 / $538.11"
+          "position_pct": 5.24,
+          "stop": "$420.72",
+          "targets": "$531.60 / $575.96"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-05-08T23:43:44.929805+10:00",
-        "signal_hash": "92288e6bde06"
+        "sent_at": "2026-05-12T01:46:19.283578+10:00",
+        "signal_hash": "0f50c03d8ae2"
       }
     },
     "MSFT": {
@@ -110,16 +110,16 @@
       "breakout_entry": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$706.08 - $708.62",
-          "max_loss_pct": 0.29,
+          "entry_zone": "$713.52 - $716.03",
+          "max_loss_pct": 0.28,
           "position_pct": 10.0,
-          "stop": "$687.02",
-          "targets": "$737.83 / $758.16"
+          "stop": "$694.71",
+          "targets": "$744.88 / $764.94"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-05-09T01:18:37.068381+10:00",
-        "signal_hash": "8fe3331425d2"
+        "sent_at": "2026-05-12T01:46:19.283578+10:00",
+        "signal_hash": "8ee2e71edc2d"
       }
     },
     "SMH": {
