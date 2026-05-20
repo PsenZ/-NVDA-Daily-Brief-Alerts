@@ -67,6 +67,8 @@ class AppConfig:
     risk_alerts_enabled: bool = False
     max_entry_zone_width_warn_pct: float = 3.0
     max_entry_zone_width_reject_pct: float = 6.0
+    memory_log_path: str = os.path.join("memory", "decision_log.jsonl")
+    decision_memory_holding_days: int = 5
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -115,4 +117,8 @@ class AppConfig:
             ),
             max_entry_zone_width_warn_pct=_float_env("MAX_ENTRY_ZONE_WIDTH_WARN_PCT", 3.0),
             max_entry_zone_width_reject_pct=_float_env("MAX_ENTRY_ZONE_WIDTH_REJECT_PCT", 6.0),
+            memory_log_path=os.getenv(
+                "MEMORY_LOG_PATH", os.path.join("memory", "decision_log.jsonl")
+            ),
+            decision_memory_holding_days=_int_env("DECISION_MEMORY_HOLDING_DAYS", 5),
         )

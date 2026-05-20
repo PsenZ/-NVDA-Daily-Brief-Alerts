@@ -6,12 +6,7 @@ import pandas as pd
 from veyraquant.config import AppConfig, SmtpConfig
 from veyraquant.market import build_market_context
 from veyraquant.models import FundamentalsData, MarketContext, NewsBundle, SignalResult, TechSnapshot, TradePlan
-from veyraquant.reporting import (
-    _contains_any_marker,
-    _filter_by_markers,
-    compose_alert_email,
-    compose_daily_report,
-)
+from veyraquant.reporting import compose_alert_email, compose_daily_report
 from veyraquant.signals import analyze_symbol, choose_signal_type
 from veyraquant.timeutils import SYDNEY_TZ
 
@@ -64,6 +59,7 @@ def make_result(
     score,
     *,
     setup_type="setup",
+    rating="Hold",
     is_actionable=False,
     plan_kind="wait",
     entry_zone="NA",
@@ -73,9 +69,15 @@ def make_result(
     max_loss_pct=0.0,
     reasons=None,
     risks=None,
+    bull_case=None,
+    bear_case=None,
+    market_evidence=None,
+    validation_warnings=None,
     warnings=None,
     rejection_reasons=None,
     suppressed_by=None,
+    portfolio_decision="watchlist",
+    portfolio_reason="Not ready yet.",
 ):
     trade_plan = TradePlan(
         entry_zone=entry_zone,
@@ -114,6 +116,15 @@ def make_result(
         is_actionable=is_actionable,
         suppressed_by=suppressed_by or [],
         plan_kind=plan_kind,
+        rating=rating,
+        bull_case=bull_case or ["bull case"],
+        bear_case=bear_case or ["bear case"],
+        market_evidence=market_evidence or ["QQQ remains above SMA20."],
+        conviction_level="high" if is_actionable else "low",
+        decision_balance="mixed",
+        validation_warnings=validation_warnings or [],
+        portfolio_decision=portfolio_decision,
+        portfolio_reason=portfolio_reason,
     )
 
 
@@ -130,7 +141,7 @@ def test_analyze_symbol_outputs_required_report_fields():
     config = make_config()
     daily = price_frame()
     market = build_market_context({"SPY": daily, "QQQ": daily, "SMH": daily})
-    news = NewsBundle([], [], {"score": 0.3, "label": "偏多", "sample_size": 3})
+    news = NewsBundle([], [], {"score": 0.3, "label": "bullish", "sample_size": 3})
     result = analyze_symbol(
         "NVDA",
         daily,
@@ -144,23 +155,25 @@ def test_analyze_symbol_outputs_required_report_fields():
 
     assert result.symbol == "NVDA"
     assert result.score > 0
-    assert result.market_regime in {"风险偏好", "中性震荡", "风险规避"}
     assert result.entry_zone
     assert result.stop
     assert result.targets
     assert result.position_pct >= 0
     assert result.max_loss_pct >= 0
-    assert result.reasons
-    assert "trend" in result.contributions
+    assert result.bull_case
+    assert result.bear_case
+    assert result.market_evidence
+    assert result.rating in {"Buy", "Overweight", "Hold", "Underweight", "No Trade"}
+    assert result.conviction_level in {"high", "medium", "low"}
 
 
-def test_daily_report_groups_results_into_new_sections():
+def test_daily_report_uses_briefing_structure():
     config = make_config()
     market = MarketContext(
         label="风险偏好",
         score=18.0,
         reasons=["QQQ above SMA20", "SMH strong"],
-        risks=[],
+        risks=["VIX still elevated versus quiet tape."],
         snapshots={"SPY": {"last": 500, "sma20": 490, "sma50": 480, "perf20": 3.2}},
     )
     buy_result = make_result(
@@ -168,6 +181,7 @@ def test_daily_report_groups_results_into_new_sections():
         "BUY_TRIGGER",
         "突破入场",
         88,
+        rating="Buy",
         setup_type="breakout_entry",
         is_actionable=True,
         plan_kind="buy",
@@ -176,13 +190,19 @@ def test_daily_report_groups_results_into_new_sections():
         targets="$104.00 / $106.00",
         position_pct=8.0,
         max_loss_pct=0.4,
-        risks=["entry zone width 4.00% exceeds warning threshold 3.00%", "portfolio heat trimmed"],
+        bull_case=["trend is aligned", "breakout volume is strong"],
+        bear_case=["price is slightly extended"],
+        market_evidence=["QQQ remains above SMA20."],
+        validation_warnings=["entry zone width 4.00% exceeds warning threshold 3.00%"],
+        portfolio_decision="approved",
+        portfolio_reason="Approved as the best-ranked semiconductor setup on today's board.",
     )
     add_result = make_result(
         "AMD",
         "ADD_TRIGGER",
         "趋势回踩加仓",
         77,
+        rating="Overweight",
         setup_type="pullback_add",
         is_actionable=True,
         plan_kind="add",
@@ -191,155 +211,114 @@ def test_daily_report_groups_results_into_new_sections():
         targets="$54.00 / $56.00",
         position_pct=6.0,
         max_loss_pct=0.5,
+        bull_case=["pullback is orderly"],
+        bear_case=["needs support to hold"],
+        market_evidence=["SMH is still outperforming SPY."],
+        portfolio_decision="approved",
+        portfolio_reason="Approved as a secondary semiconductor setup.",
     )
     watch_result = make_result(
         "MSFT",
         "WATCH",
         "持有观察",
         58,
-        plan_kind="watch",
-        reasons=["need cleaner pullback"],
+        setup_type="hold_watch",
+        rating="Hold",
+        reasons=["needs cleaner pullback"],
+        bull_case=["trend is still intact"],
+        bear_case=["entry is not clean enough"],
+        portfolio_decision="watchlist",
+        portfolio_reason="Not ready for execution today.",
+    )
+    deferred_result = make_result(
+        "AAPL",
+        "WATCH",
+        "持有观察",
+        62,
+        setup_type="hold_watch",
+        rating="Hold",
+        bull_case=["quality trend but crowded sector"],
+        bear_case=["better ideas already filled the book"],
+        portfolio_decision="deferred",
+        portfolio_reason="Deferred because the daily approval limit is already full.",
+    )
+    risk_result = make_result(
+        "TSLA",
+        "RISK_REDUCE",
+        "减仓/风险升高",
+        38,
+        setup_type="risk_reduce",
+        rating="Underweight",
+        reasons=["trend weakening"],
+        bull_case=[],
+        bear_case=["lost SMA20", "volatility is expanding"],
+        portfolio_decision="risk_action",
+        portfolio_reason="Reduce exposure and avoid adding risk.",
     )
     reject_result = make_result(
         "QQQ",
         "REJECT",
         "禁止交易/等待",
         72,
-        plan_kind="reject",
-        entry_zone="交易计划校验失败，不执行买入计划",
+        setup_type="breakout_entry",
+        rating="No Trade",
         rejection_reasons=["target1 must exceed entry_high"],
         suppressed_by=["trade_plan_validation_failed"],
+        portfolio_decision="rejected",
+        portfolio_reason="Blocked before portfolio approval.",
     )
 
     subject, body = compose_daily_report(
-        [buy_result, add_result, watch_result, reject_result],
+        [buy_result, add_result, watch_result, deferred_result, risk_result, reject_result],
         market,
         config,
         datetime(2026, 4, 20, 7, 30, tzinfo=SYDNEY_TZ),
+        ["AAPL deferred after reaching the daily approval limit (2)."],
     )
 
     assert "Test Brief" in subject
-    assert "[Today Conclusion]" in body
+    assert "[Executive Summary]" in body
     assert "[Market Filter]" in body
-    assert "[Action List]" in body
-    assert "[Hold / Watch]" in body
+    assert "[Top Actions]" in body
+    assert "[Watchlist]" in body
+    assert "[Risk Actions]" in body
     assert "[Rejected Plans]" in body
     assert "Sydney 2026-04-20 07:30 / US Eastern 2026-04-19 17:30" in body
 
-    action_section = section(body, "Action List")
-    assert "NVDA" in action_section
-    assert "BUY_TRIGGER" in action_section
-    assert "AMD" in action_section
-    assert "ADD_TRIGGER" in action_section
-    assert "validation_warnings:" in action_section
-    assert "entry zone width 4.00% exceeds warning threshold 3.00%" in action_section
-    assert "plan:" in action_section
-    assert "risk: position 8.00% | max_loss 0.40%" in action_section
-    assert action_section.count("\n## ") <= 3
+    top_actions = section(body, "Top Actions")
+    assert "NVDA" in top_actions
+    assert "AMD" in top_actions
+    assert "rating/action: Buy / BUY_TRIGGER" in top_actions
+    assert "market evidence: QQQ remains above SMA20." in top_actions
+    assert "validation warning: entry zone width 4.00% exceeds warning threshold 3.00%" in top_actions
 
-    hold_section = section(body, "Hold / Watch")
-    assert "MSFT" in hold_section
-    assert "WATCH" in hold_section
-    assert "next:" in hold_section
-    assert "summary:" in hold_section
-    assert "position_pct:" not in hold_section
-    assert "entry_zone:" not in hold_section
+    watchlist = section(body, "Watchlist")
+    assert "MSFT | Hold | 58" in watchlist
+    assert "AAPL | Hold | 62" in watchlist
+    assert "entry_zone" not in watchlist
+    assert "position_pct" not in watchlist
 
-    rejected_section = section(body, "Rejected Plans")
-    assert "QQQ" in rejected_section
-    assert "rejection:" in rejected_section
-    assert "trade_plan_validation_failed" in rejected_section
+    risk_actions = section(body, "Risk Actions")
+    assert "TSLA | Underweight | score 38" in risk_actions
+    assert "Reduce exposure and avoid adding risk." in risk_actions
+
+    rejected = section(body, "Rejected Plans")
+    assert "QQQ | score 72" in rejected
+    assert "target1 must exceed entry_high" in rejected
+    assert "trade_plan_validation_failed" in rejected
 
     system_notes = section(body, "System Notes")
-    assert "portfolio heat warnings:" in system_notes
+    assert "validation warnings:" in system_notes
+    assert "portfolio notes:" in system_notes
 
 
-def test_non_actionable_does_not_display_buy_plan_in_hold_watch_section():
-    config = make_config()
-    market = MarketContext("中性震荡", 0.0, ["neutral"], [], {})
-    wait_result = make_result(
-        "AAPL",
-        "WAIT",
-        "禁止交易/等待",
-        40,
-        plan_kind="wait",
-        entry_zone="等待更清晰的趋势或市场确认",
-    )
-
-    _subject, body = compose_daily_report(
-        [wait_result], market, config, datetime(2026, 4, 20, 7, 30, tzinfo=SYDNEY_TZ)
-    )
-
-    hold_section = section(body, "Hold / Watch")
-    assert "AAPL" in hold_section
-    assert "WAIT" in hold_section
-    assert "entry_zone:" not in hold_section
-    assert "position_pct:" not in hold_section
-
-
-def test_action_list_and_rejected_sections_do_not_depend_on_risk_text_keywords():
-    config = make_config()
-    market = MarketContext("风险偏好", 10.0, ["strong"], [], {})
-    buy_result = make_result(
-        "TSLA",
-        "BUY_TRIGGER",
-        "突破入场",
-        81,
-        setup_type="breakout_entry",
-        is_actionable=True,
-        plan_kind="buy",
-        entry_zone="$200.00 - $201.00",
-        stop="$196.00",
-        targets="$208.00 / $212.00",
-        position_pct=7.0,
-        max_loss_pct=0.5,
-        risks=["this text says wait but should not change section"],
-    )
-    reject_result = make_result(
-        "SMH",
-        "REJECT",
-        "禁止交易/等待",
-        67,
-        plan_kind="reject",
-        entry_zone="交易计划校验失败，不执行买入计划",
-        risks=["contains breakout wording but still rejected"],
-        rejection_reasons=["RR below threshold"],
-        suppressed_by=["trade_plan_validation_failed"],
-    )
-
-    _subject, body = compose_daily_report(
-        [buy_result, reject_result], market, config, datetime(2026, 4, 20, 7, 30, tzinfo=SYDNEY_TZ)
-    )
-
-    action_section = section(body, "Action List")
-    rejected_section = section(body, "Rejected Plans")
-    assert "TSLA" in action_section
-    assert "SMH" not in action_section
-    assert "SMH" in rejected_section
-
-
-def test_reporting_helpers_match_keyword_markers():
-    risks = [
-        "entry zone width 4.00% exceeds warning threshold 3.00%",
-        "portfolio heat trimmed position",
-        "avoid chase after sharp extension",
-    ]
-
-    assert _contains_any_marker(risks, ("chase",))
-    assert _filter_by_markers(risks, ("warning threshold",)) == [
-        "entry zone width 4.00% exceeds warning threshold 3.00%"
-    ]
-    assert _filter_by_markers(risks, ("portfolio heat",)) == [
-        "portfolio heat trimmed position"
-    ]
-
-
-def test_alert_email_contains_dual_timezone_header():
-    result = make_result(
+def test_alert_email_matches_entry_and_risk_styles():
+    entry = make_result(
         "NVDA",
         "BUY_TRIGGER",
         "突破入场",
         88,
+        rating="Buy",
         setup_type="breakout_entry",
         is_actionable=True,
         plan_kind="buy",
@@ -348,13 +327,43 @@ def test_alert_email_contains_dual_timezone_header():
         targets="$104.00 / $106.00",
         position_pct=8.0,
         max_loss_pct=0.4,
+        bull_case=["trend is aligned"],
+        bear_case=["price is slightly extended"],
+        market_evidence=["QQQ remains above SMA20."],
+        validation_warnings=["entry zone width 4.00% exceeds warning threshold 3.00%"],
+        portfolio_decision="approved",
+        portfolio_reason="Approved as the best-ranked setup.",
+    )
+    risk = make_result(
+        "TSLA",
+        "RISK_REDUCE",
+        "减仓/风险升高",
+        38,
+        rating="Underweight",
+        setup_type="risk_reduce",
+        bull_case=[],
+        bear_case=["lost SMA20"],
+        market_evidence=["Growth breadth is fading."],
+        portfolio_decision="risk_action",
+        portfolio_reason="Reduce exposure and avoid adding risk.",
     )
 
-    _subject, body = compose_alert_email(
-        result, datetime(2026, 4, 20, 7, 30, tzinfo=SYDNEY_TZ)
+    entry_subject, entry_body = compose_alert_email(
+        entry, datetime(2026, 4, 20, 7, 30, tzinfo=SYDNEY_TZ)
+    )
+    risk_subject, risk_body = compose_alert_email(
+        risk, datetime(2026, 4, 20, 7, 30, tzinfo=SYDNEY_TZ)
     )
 
-    assert "Sydney 2026-04-20 07:30 / US Eastern 2026-04-19 17:30" in body
+    assert "Buy / BUY_TRIGGER" in entry_subject
+    assert "plan:" in entry_body
+    assert "why now:" in entry_body
+    assert "watch risk:" in entry_body
+    assert "validation warning:" in entry_body
+
+    assert "Risk Alert" in risk_subject
+    assert "suggested posture:" in risk_body
+    assert "No buy/add trade plan is attached to this risk alert." in risk_body
 
 
 def test_breakout_requires_volume_and_negative_news_can_veto():
@@ -375,8 +384,8 @@ def test_breakout_requires_volume_and_negative_news_can_veto():
         }
     )
     market = MarketContext("风险偏好", 20.0, [], [], {"QQQ": {"perf20": 5.0}, "SMH": {"perf20": 6.0}})
-    positive_news = NewsBundle([], [], {"score": 0.25, "label": "偏多", "sample_size": 3})
-    negative_news = NewsBundle([], [], {"score": -0.35, "label": "偏空", "sample_size": 3})
+    positive_news = NewsBundle([], [], {"score": 0.25, "label": "bullish", "sample_size": 3})
+    negative_news = NewsBundle([], [], {"score": -0.35, "label": "bearish", "sample_size": 3})
 
     signal_type, alert_kind = choose_signal_type(tech, None, 72, market, positive_news, config)
     veto_signal_type, veto_alert_kind = choose_signal_type(

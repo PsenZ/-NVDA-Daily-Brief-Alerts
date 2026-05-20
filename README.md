@@ -1,192 +1,215 @@
-﻿# VeyraQuant 量化交易助手
+# VeyraQuant 量化交易助手
 
-VeyraQuant 是一个面向美股波段交易的半自动量化交易助手。它会定时扫描股票池，结合行情、技术指标、市场环境、新闻情绪、期权数据和风控预算，生成每日简报、机会提醒和可复核的交易计划。
+VeyraQuant 是一个面向美股波段交易的半自动量化交易助手。它会定时扫描股票池，结合市场环境、技术结构、新闻情绪、期权线索和风险预算，输出每天可复核的交易决策简报、机会提醒与风险提醒。
 
-它不是自动交易机器人，也不会连接券商 API。VeyraQuant 的目标是帮助交易者更快回答三个问题：
+它不是自动交易机器人，也不会连接券商 API。它的核心目标不是替你下单，而是帮你更快、更稳定地回答三件事：
 
-- 现在市场环境是否适合进攻？
-- 哪些标的最值得关注？
-- 如果要交易，入场区、止损、目标位和仓位应该如何规划？
+- 今天的市场环境是否支持进攻
+- 现在最值得关注的是哪几只票
+- 如果要做，应该如何定义入场、止损、目标位和仓位
 
 ## 核心亮点
 
-### 1. 股票池扫描
+### 1. 股票池扫描，而不是单票主观盯盘
 
-通过 `SYMBOLS` 配置多个美股或 ETF，例如：
+通过 `SYMBOLS` 配置一组美股或 ETF，例如：
 
 ```text
 NVDA,TSLA,AAPL,AMD,MU,QQQ,SMH
 ```
 
-系统会为每个标的计算综合评分，并按优先级排序，避免只盯着单一股票做主观判断。
+系统会逐个标的打分、排序、筛选，再输出当天真正值得执行或观察的对象，避免只盯着单一热门票。
 
-### 2. 市场环境过滤
+### 2. 市场先过滤，再谈个股交易
 
-VeyraQuant 不会只看个股信号。它会先读取市场背景：
+VeyraQuant 先看大盘和板块环境，再决定是否允许进攻：
 
-- `SPY`: 美股大盘风险偏好
-- `QQQ`: 科技股趋势
-- `SMH`: 半导体板块强度
-- `^VIX`: 市场波动压力
+- `SPY`：大盘风险偏好
+- `QQQ`：科技成长趋势
+- `SMH`：半导体板块强弱
+- `^VIX`：波动率压力
 
-当市场处于风险规避状态时，系统会降低入场信号的进攻性，避免在大盘环境不利时盲目追涨。
+在风险规避环境下，系统会收紧批准数量和执行节奏，而不是机械地照单全收高分信号。
 
-### 3. 多维度分项评分
+### 3. 多维度打分，但不是黑箱
 
-每个标的都会拆成多个可解释评分项：
+每个标的的综合判断来自多个可解释维度：
 
-- 趋势结构：MA5/MA10/MA20/MA50/MA200、20/55 日高低点
+- 趋势结构：MA5 / MA10 / MA20 / MA50 / MA200，20 日与 55 日高低点
 - 动量状态：RSI、MACD、ADX、DI
-- 相对强弱：个股相对 `SPY` / `QQQ` 的表现
-- 成交量确认：当前量能相对 20 日均量与 5 日均量
+- 相对强弱：相对 `SPY` / `QQQ` 的表现
+- 成交量确认：5 日和 20 日量能比较
 - 波动与期权：ATR、隐含波动率、Put/Call 比率
-- 新闻与情绪：公开 RSS、Google News、社媒标题代理情绪
-- 事件风险：基本面增长、分析师一致预期
-- 市场环境：大盘、科技、半导体、VIX 背景
-- 纪律过滤：乖离率不追高、利空消息一票否决、板块共振加分
+- 新闻与情绪：RSS、Google News、公开标题情绪
+- 事件风险：收入增长、分析师一致预期
+- 纪律过滤：反追高、负面舆情 veto、市场 risk-off veto
 
-这样你看到的不只是一个分数，而是知道分数从哪里来。
+它给你的不是一句“买 / 不买”，而是一套有来由的判断。
 
-### 4. 明确交易计划
+### 4. 从分数驱动升级为论证驱动
 
-当信号达到条件时，VeyraQuant 会输出完整交易计划：
+系统现在不再只依赖单一总分直接落地，而是把每个最终结果拆成：
 
-- 信号类型
-- 综合评分
-- 市场状态
-- 入场区间
-- 止损位置
-- 第一/第二目标位
-- 预期 R 倍数
-- 建议仓位比例
-- 最大亏损占账户比例
-- 触发条件
-- 取消条件
-- 主要理由
-- 主要风险
+- `bull_case`：为什么现在值得做
+- `bear_case`：最大的反方风险是什么
+- `rating`：`Buy / Overweight / Hold / Underweight / No Trade`
+- `action`：`BUY_TRIGGER / ADD_TRIGGER / WATCH / WAIT / RISK_REDUCE / REJECT`
+- `conviction_level`：`high / medium / low`
+- `decision_balance`：多空结构是否偏向一致还是脆弱
 
-示例字段：
+这让输出更像真实交易台的研究与决策过程，而不是单一信号灯。
 
-```text
-symbol: NVDA
-signal_type: 趋势回踩加仓
-score: 72
-market_regime: 风险偏好
-entry_zone: $904.20 - $916.80
-stop: $874.50
-targets: $952.00 / $988.40
-position_pct: 6.40%
-max_loss_pct: 0.50%
-```
+### 5. 新增组合审批层，而不是把所有高分票都塞进日报
 
-只有最终 `actionable` 的结果才会保留完整买入型交易计划。`持有观察`、`禁止交易/等待`、`减仓/风险升高` 和被 validator 否决的结果不会再伪装成可执行买入计划。
+在原始信号之上，系统增加了规则型 `Portfolio Manager` 审批层：
 
-### 4.1 当前策略框架
+- 同板块候选过多时，只保留更强的 1-2 个
+- `risk-off` 环境下降低当日批准数量
+- 组合 heat 紧张时，优先保留更干净、更高 conviction 的计划
+- `WATCH / WAIT / RISK_REDUCE / REJECT` 不会混进可执行计划列表
 
-当前系统更接近“纪律化趋势波段策略助手”，核心逻辑是：
+这一步非常重要，因为真实交易里最难的问题往往不是“有没有信号”，而是“今天先做谁”。
 
-- 市场先过滤：先判断 `risk-on / neutral / risk-off`
-- 个股再打分：优先多头排列、强趋势、量价配合
-- 买点偏好：优先缩量回踩，不鼓励高位追涨
-- 突破确认：要求放量、强势收盘、乖离率可控
-- 风险排查：舆情明显偏空时，买入信号会被降级或否决
+### 6. 交易计划先校验，再进入结果对象
 
-你现在实际采用的两类主交易机会是：
+只有最终 `actionable` 的结果才允许保留完整交易计划。系统会在计划生成后做最后一层有效性校验：
 
-- `突破入场`：接近/突破 20 日高点，且 5 日量比足够强、收盘位置强势
-- `趋势回踩加仓`：MA5 > MA10 > MA20，多头趋势中缩量回踩 MA5/MA10 附近
+- RR 不得低于 `MIN_RR`
+- 仓位不得超过 `MAX_POSITION_PCT`
+- 最大亏损不得超过 `RISK_PER_TRADE_PCT`
+- 过宽的 entry zone 先给 warning，再对明显异常区间做 reject
 
-### 5. 风控优先
+也就是说，日报里出现的可执行计划，不只是“像机会”，还必须先通过内部风控几何关系检查。
 
-VeyraQuant 默认采用保守风险参数：
+### 7. 风控不是附属品，而是主线
+
+默认风险参数：
 
 - 单笔风险：`0.5%`
 - 单标的最大仓位：`10%`
-- 组合总风险暴露上限：`3%`
+- 组合总风险暴露：`3%`
 - ATR 止损倍数：`2.0`
 - 最低盈亏比：`1.5R`
 
-仓位不是拍脑袋给出的。系统会根据入场价、止损距离、单笔风险预算和组合风险上限计算建议仓位。
+系统会根据入场区、止损距离和风险预算反推出建议仓位，而不是主观拍脑袋。
 
-在生成 actionable 交易计划后，系统还会做一层计划校验：
+### 8. 每日简报已经重构为“晨会决策版”
 
-- RR 必须不低于 `MIN_RR`
-- 仓位不得超过 `MAX_POSITION_PCT`
-- 最大亏损占比不得超过 `RISK_PER_TRADE_PCT`
-- 过宽的 entry zone 会先给 warning，再对明显异常区间做 reject
+日报不再堆一长串指标，而是先给结论，再给行动：
 
-这层校验只用于阻止无效交易计划进入结果对象，不会新增交易策略或改写原有市场信号逻辑。
-
-### 6. 自动邮件简报与提醒
-
-系统支持两类输出：
-
-- 每日简报：在设定的悉尼时间窗口发送股票池总览和重点交易计划
-- 每日简报：到达阈值时间后，当天任意一次成功运行都会补发一次，避免因 GitHub Actions 延迟漏掉整天日报
-- 机会提醒：在美股正常交易时段内，如果信号达到阈值，发送入场、加仓或风险提醒
-
-每类提醒都有冷却机制，避免同一信号反复刷屏。
-
-当前日报已经重组为更接近交易台晨会的结构：
-
-- `Today Conclusion`
+- `Executive Summary`
 - `Market Filter`
-- `Action List`
-- `Hold / Watch`
-- `Avoid Chase / Risk Reduce`
+- `Top Actions`
+- `Watchlist`
+- `Risk Actions`
 - `Rejected Plans`
 - `System Notes`
 
-其中只有 `BUY_TRIGGER` / `ADD_TRIGGER` 且 `is_actionable=True` 的结果会进入 `Action List`。其余结果只按观察、回避、拒绝或风控状态展示，不展示成可执行买入计划。
+其中只有真正通过审批的 `BUY_TRIGGER / ADD_TRIGGER` 才会进入 `Top Actions`。  
+`WATCH / WAIT / RISK_REDUCE / REJECT` 会分区展示，但不会伪装成可执行买入计划。
 
-### 7. 免费数据优先，支持降级
+### 9. 提醒邮件和日报使用同一套语言
 
-当前数据源以免费来源为主：
+机会提醒只针对：
 
-- Yahoo Finance: 行情、基本面、期权链
-- NVIDIA RSS / Google News RSS: 新闻和公开标题情绪
-- 本地缓存: 当实时数据失败时尝试降级使用缓存
+- `BUY_TRIGGER`
+- `ADD_TRIGGER`
 
-如果 Yahoo、RSS 或期权数据临时不可用，系统会尽量生成带有数据降级提示的报告，而不是直接中断。
+风险提醒只针对：
 
-### 8. 可测试、可维护、可扩展
+- `RISK_REDUCE`
 
-项目已从单文件脚本升级为模块化结构：
+提醒正文现在也采用“行动 + 理由 + 风险”的表达，不再是字段堆叠。
+
+另外，提醒机制已经升级为：
+
+- 相同 `symbol + alert_kind + signal_hash` 在 cooldown 内不重复发
+- 如果 `signal_hash` 明显变化，允许在 cooldown 内重新提醒
+- `RISK_REDUCE` 风险提醒为独立通道，可通过 `ENABLE_RISK_ALERTS` 单独开启
+
+### 10. 决策有记忆，不再发完就忘
+
+系统会把每日决策落盘到本地 memory log，记录：
+
+- 日期
+- symbol
+- setup_type
+- action
+- rating
+- score
+- bull_case
+- bear_case
+- market_regime
+- signal_hash
+- trade plan summary
+- rejection_reasons
+- portfolio_decision
+
+后续会尝试回填：
+
+- 5 日收益
+- 相对 `SPY` 的 alpha
+- outcome 状态
+
+这让系统开始具备“知道自己哪些 setup 更有效”的基础能力。
+
+## 当前策略框架
+
+你现在运行的是一套偏华尔街交易员思路的规则型波段系统，核心流程是：
+
+1. 先看市场是否支持进攻  
+2. 再给个股做多维评分  
+3. 生成候选信号  
+4. 做 action 一致性修正与计划校验  
+5. 通过组合审批层决定今天真正批准哪些计划  
+6. 用晨会式日报和提醒邮件输出最终决策
+
+当前主要捕捉的机会仍然是两类：
+
+- `突破入场`
+- `趋势回踩加仓`
+
+你没有引入自动下单，也没有让 LLM 接管买卖参数。核心执行逻辑依然是规则型、可复核、可测试的。
+
+## 信号与动作
+
+系统当前使用的动作集合：
+
+- `BUY_TRIGGER`
+- `ADD_TRIGGER`
+- `WATCH`
+- `WAIT`
+- `RISK_REDUCE`
+- `REJECT`
+
+系统当前使用的评级集合：
+
+- `Buy`
+- `Overweight`
+- `Hold`
+- `Underweight`
+- `No Trade`
+
+评级表达态度，动作表达执行状态。两者同时存在，方便你快速判断“看法”和“操作”是否一致。
+
+## 项目结构
 
 ```text
 veyraquant/
-  config.py       # 环境变量与配置
-  data.py         # 数据获取、缓存、降级
-  indicators.py   # RSI、MACD、ATR、ADX 等指标
-  market.py       # 市场环境过滤
-  signals.py      # 信号评分与交易计划
-  risk.py         # 仓位与组合风险控制
-  validator.py    # actionable 交易计划有效性校验
-  reporting.py    # 日报与提醒内容
-  state.py        # 状态记录与迁移
-  backtest.py     # 简易回测框架
-  runner.py       # 主运行流程
+  config.py            # 环境变量与配置
+  data.py              # 行情、新闻、期权、缓存与降级
+  indicators.py        # RSI、MACD、ATR、ADX 等指标
+  market.py            # 市场环境过滤
+  signals.py           # 信号评分、论证字段、交易计划
+  risk.py              # 仓位与组合 heat 控制
+  validator.py         # actionable 计划有效性校验
+  decision_manager.py  # 组合审批层
+  memory.py            # 决策记忆与 outcome 回填
+  reporting.py         # 日报与提醒文案
+  state.py             # 日报/提醒状态与冷却逻辑
+  runner.py            # 主运行流程
+  backtest.py          # 轻量回测
 ```
-
-并包含测试覆盖：
-
-- 技术指标测试
-- 风控计算测试
-- 状态迁移测试
-- 数据降级测试
-- 报告字段测试
-- 信号评分测试
-- 简易回测测试
-
-## 信号类型
-
-VeyraQuant 当前支持以下信号：
-
-- `突破入场`: 趋势、动量、量能和市场背景共同支持突破
-- `趋势回踩加仓`: 强趋势中回踩关键均线附近，适合分批加仓
-- `持有观察`: 分数尚可，但不适合新增仓位
-- `减仓/风险升高`: 过热、转弱或风险条件恶化
-- `禁止交易/等待`: 数据不足、市场不利或信号不清晰
 
 ## 环境变量
 
@@ -208,15 +231,16 @@ SEND_HOUR=7
 SEND_MINUTE=30
 SEND_WINDOW_MINUTES=30
 ENABLE_ENTRY_ALERTS=true
+ENABLE_RISK_ALERTS=false
 ALERT_COOLDOWN_HOURS=12
 ALERT_SCORE_THRESHOLD=65
 INTRADAY_INTERVAL=30m
-SUBJECT_PREFIX=VeyraQuant 量化简报
+SUBJECT_PREFIX=VeyraQuant Quant Brief
 DRY_RUN=false
 FORCE_DAILY_REPORT=false
 ```
 
-### 风控参数
+### 风控与计划校验
 
 ```text
 ACCOUNT_EQUITY=
@@ -229,7 +253,12 @@ MAX_ENTRY_ZONE_WIDTH_WARN_PCT=3.0
 MAX_ENTRY_ZONE_WIDTH_REJECT_PCT=6.0
 ```
 
-`ACCOUNT_EQUITY` 是可选项。如果不设置，系统只输出百分比仓位，不输出具体金额。
+### 决策记忆
+
+```text
+MEMORY_LOG_PATH=memory/decision_log.jsonl
+DECISION_MEMORY_HOLDING_DAYS=5
+```
 
 ## 本地运行
 
@@ -239,7 +268,7 @@ MAX_ENTRY_ZONE_WIDTH_REJECT_PCT=6.0
 python -m pip install -r requirements.txt
 ```
 
-干跑模式：
+本地 dry-run：
 
 ```powershell
 $env:DRY_RUN="true"
@@ -255,14 +284,14 @@ pytest
 
 ## GitHub Actions
 
-项目内置 GitHub Actions workflow：
+项目内置定时 workflow，用于无人值守运行：
 
 - 每 20 分钟自动运行
-- 到达发送阈值后，当天任意一次成功运行都会补发每日简报
+- 到达日报阈值后，当天任意一次成功运行都可补发日报
 - 只在美股正常交易时段发送机会提醒
-- 支持手动 `workflow_dispatch`
-- 支持 dry-run
-- 支持 `force_send=true` 的手动强制日报测试，不受时间窗口限制，且不会覆盖当天正式日报状态
+- 支持 `workflow_dispatch`
+- 支持 `dry_run`
+- 支持 `force_send=true` 的手动日报测试
 - 只在状态文件变化时提交 `state/last_sent.json`
 
 ## 适合谁使用
@@ -270,20 +299,20 @@ pytest
 VeyraQuant 适合：
 
 - 想系统化跟踪美股波段机会的交易者
-- 想把主观看盘流程变成可重复检查清单的人
-- 想在入场前明确止损、目标位和仓位的人
-- 想用免费数据源搭建轻量量化助手的人
-- 想学习如何把交易逻辑拆成数据、信号、风控和报告模块的人
+- 想把主观盯盘流程变成可重复决策流程的人
+- 想明确入场、止损、目标位和仓位的人
+- 想用免费数据源构建轻量量化辅助系统的人
+- 想学习如何把交易逻辑拆成数据、信号、风控、审批、报告五层的人
 
 ## 不适合谁使用
 
 VeyraQuant 不适合：
 
-- 想要自动下单机器人的用户
-- 想要高频交易或毫秒级行情系统的用户
-- 想要保证收益或确定性买卖点的用户
-- 不愿意人工复核交易计划的用户
+- 想要自动下单机器人
+- 想做高频或毫秒级交易
+- 想要“稳赚策略”或收益承诺
+- 不愿意人工复核交易计划的人
 
 ## 免责声明
 
-VeyraQuant 仅用于信息分析和交易辅助，不构成投资建议，不代表任何自动交易指令。所有交易计划都需要人工复核，任何投资决策和交易风险均由使用者自行承担。
+VeyraQuant 仅用于信息分析与交易辅助，不构成投资建议，也不代表任何自动交易指令。所有交易计划都需要人工复核，任何投资决策与风险均由使用者自行承担。

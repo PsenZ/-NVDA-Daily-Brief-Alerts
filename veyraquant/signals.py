@@ -1,4 +1,4 @@
-﻿import hashlib
+import hashlib
 import math
 from typing import Optional
 
@@ -22,12 +22,12 @@ from .validator import validate_trade_plan
 
 ACTIONABLE_ACTIONS = {"BUY_TRIGGER", "ADD_TRIGGER"}
 ACTION_TO_SIGNAL_TYPE = {
-    "BUY_TRIGGER": "突破入场",
-    "ADD_TRIGGER": "趋势回踩加仓",
-    "WATCH": "持有观察",
-    "RISK_REDUCE": "减仓/风险升高",
-    "WAIT": "禁止交易/等待",
-    "REJECT": "禁止交易/等待",
+    "BUY_TRIGGER": "\u7a81\u7834\u5165\u573a",
+    "ADD_TRIGGER": "\u8d8b\u52bf\u56de\u8e29\u52a0\u4ed3",
+    "WATCH": "\u6301\u6709\u89c2\u5bdf",
+    "RISK_REDUCE": "\u51cf\u4ed3/\u98ce\u9669\u5347\u9ad8",
+    "WAIT": "\u7981\u6b62\u4ea4\u6613/\u7b49\u5f85",
+    "REJECT": "\u7981\u6b62\u4ea4\u6613/\u7b49\u5f85",
 }
 ACTION_TO_ALERT_KIND = {
     "BUY_TRIGGER": "breakout_entry",
@@ -45,6 +45,14 @@ ACTION_TO_PLAN_KIND = {
     "WAIT": "wait",
     "REJECT": "reject",
 }
+ACTION_TO_RATING = {
+    "BUY_TRIGGER": "Buy",
+    "ADD_TRIGGER": "Overweight",
+    "WATCH": "Hold",
+    "RISK_REDUCE": "Underweight",
+    "WAIT": "Hold",
+    "REJECT": "No Trade",
+}
 SETUP_TO_ACTION = {
     "breakout_entry": "BUY_TRIGGER",
     "pullback_add": "ADD_TRIGGER",
@@ -52,6 +60,9 @@ SETUP_TO_ACTION = {
     "risk_reduce": "RISK_REDUCE",
     "wait": "WAIT",
 }
+MARKET_RISK_OFF = "\u98ce\u9669\u89c4\u907f"
+MARKET_RISK_ON = "\u98ce\u9669\u504f\u597d"
+MARKET_EVIDENCE_MARKERS = ("market", "sector", "SPY", "QQQ", "SMH", "VIX", "relative strength")
 
 
 def tech_summary(hist: pd.DataFrame) -> TechSnapshot:
@@ -126,7 +137,6 @@ def tech_summary(hist: pd.DataFrame) -> TechSnapshot:
 def intraday_snapshot(intraday: Optional[pd.DataFrame]) -> Optional[dict[str, float]]:
     if intraday is None or intraday.empty:
         return None
-    intraday = intraday.copy()
     close = intraday["Close"]
     volume = intraday["Volume"]
     latest = intraday.iloc[-1]
@@ -162,15 +172,15 @@ def analyze_symbol(
     if daily is None or daily.empty or len(daily) < 60:
         plan = _non_actionable_plan(
             plan_kind="wait",
-            entry_zone="等待数据恢复",
-            trigger="无",
-            cancel="数据不足",
+            entry_zone="Waiting for cleaner data.",
+            trigger="No trade until the daily history recovers.",
+            cancel="Insufficient market history.",
         )
-        return _result(
+        result = _result(
             rank=0,
             symbol=symbol,
             setup_type="data_unavailable",
-            signal_type="禁止交易/等待",
+            signal_type=ACTION_TO_SIGNAL_TYPE["WAIT"],
             action="WAIT",
             is_actionable=False,
             suppressed_by=["insufficient_daily_data"],
@@ -178,12 +188,14 @@ def analyze_symbol(
             score=0,
             market_regime=market.label,
             plan=plan,
-            reasons=["日线数据不足，无法生成可靠交易计划"],
-            risks=warnings or ["行情数据不可用"],
+            reasons=["Daily history is too short to support a reliable trade plan."],
+            risks=warnings or ["Price history is unavailable."],
             contributions={},
             alert_kind="wait",
             last_price=None,
+            warnings=warnings,
         )
+        return annotate_signal_result(result, market)
 
     tech = tech_summary(daily)
     intraday_data = intraday_snapshot(intraday)
@@ -198,7 +210,9 @@ def analyze_symbol(
     if action in ACTIONABLE_ACTIONS:
         preview_plan = preview_trade_plan(action, tech, config)
         if preview_plan.rr < config.min_rr and preview_plan.position_pct > 0:
-            risks.append(f"盈亏比 {preview_plan.rr:.2f} 低于最低要求 {config.min_rr:.2f}")
+            risks.append(
+                f"RR {preview_plan.rr:.2f} is below the minimum requirement {config.min_rr:.2f}."
+            )
             suppressed_by.append("rr_below_min")
             action = "WATCH"
 
@@ -208,9 +222,11 @@ def analyze_symbol(
     is_actionable = action in ACTIONABLE_ACTIONS
     plan = build_trade_plan(action, tech, config)
     rejection_reasons: list[str] = []
+    validation_warnings: list[str] = []
     if is_actionable:
         validation = validate_trade_plan(plan, config)
         if validation.warnings:
+            validation_warnings = list(validation.warnings)
             risks.extend(validation.warnings)
         if not validation.is_valid:
             rejection_reasons = list(validation.errors)
@@ -223,15 +239,15 @@ def analyze_symbol(
             is_actionable = False
             plan = _non_actionable_plan(
                 plan_kind="reject",
-                entry_zone="交易计划校验失败，不执行买入计划",
-                trigger="等待计划参数恢复有效后再评估",
-                cancel="无",
+                entry_zone="Trade plan validation failed. No long entry is allowed.",
+                trigger="Wait until the setup and plan parameters become valid again.",
+                cancel="None.",
             )
 
     if warnings:
         risks.extend(warnings[:3])
 
-    return _result(
+    result = _result(
         rank=0,
         symbol=symbol,
         setup_type=setup_type,
@@ -250,7 +266,9 @@ def analyze_symbol(
         last_price=tech.values["last"],
         warnings=warnings,
         rejection_reasons=rejection_reasons,
+        validation_warnings=validation_warnings,
     )
+    return annotate_signal_result(result, market)
 
 
 def score_components(
@@ -270,106 +288,106 @@ def score_components(
     trend = 0.0
     if t["sma5"] >= t["sma10"] >= t["sma20"]:
         trend += 10
-        reasons.append("MA5/MA10/MA20 多头排列，符合趋势策略优先条件")
+        reasons.append("Short moving averages are stacked higher, supporting a trend-following bias.")
     if t["last"] > t["sma20"] > t["sma50"]:
         trend += 18
-        reasons.append("价格站上 SMA20 与 SMA50，短中期趋势保持多头结构")
+        reasons.append("Price remains above SMA20 and SMA50, keeping the intermediate trend constructive.")
     elif t["last"] > t["sma20"]:
         trend += 8
-        reasons.append("价格高于 SMA20，但趋势强度仍需继续确认")
+        reasons.append("Price still holds above SMA20, but trend strength needs more proof.")
     else:
         trend -= 8
-        risks.append("价格跌回 SMA20 下方，趋势延续性转弱")
+        risks.append("Price has slipped back below SMA20 and trend persistence is weakening.")
     if not math.isnan(t["sma200"]) and t["last"] > t["sma200"]:
         trend += 8
-        reasons.append("价格位于 SMA200 上方，长期趋势仍偏强")
+        reasons.append("Price is still above SMA200, keeping the long-term structure supportive.")
     if t["last"] >= t["high_55"] * 0.98:
         trend += 6
-        reasons.append("价格接近 55 日高点，波段趋势有延续特征")
+        reasons.append("Price is trading near the 55-day high, which supports a trend continuation read.")
     contributions["trend"] = trend
 
     momentum = 0.0
     if t["macd"] > t["signal"] and t["macd_hist"] > t["macd_hist_prev"]:
         momentum += 12
-        reasons.append("MACD 位于信号线之上且柱体扩张，动能增强")
+        reasons.append("MACD is above signal and the histogram is expanding, showing improving momentum.")
     elif t["macd"] > t["signal"]:
         momentum += 6
     else:
         momentum -= 6
-        risks.append("MACD 位于信号线下方，动能偏弱")
+        risks.append("MACD has rolled under the signal line and momentum is softer.")
     if 45 <= t["rsi14"] <= 68:
         momentum += 10
-        reasons.append("RSI 位于健康强势区间，尚未明显过热")
+        reasons.append("RSI remains in a healthy range without obvious overheating.")
     elif t["rsi14"] > 72:
         momentum -= 7
-        risks.append("RSI 已进入过热区，追涨性价比下降")
+        risks.append("RSI is stretched and the reward for chasing is worse.")
     elif t["rsi14"] < 40:
         momentum -= 10
-        risks.append("RSI 偏弱，说明多头承接不足")
+        risks.append("RSI is weak, showing limited demand support.")
     if t["adx14"] >= 25 and t["plus_di"] > t["minus_di"]:
         momentum += 10
-        reasons.append("ADX 超过 25 且 +DI 领先，趋势具备持续性")
+        reasons.append("ADX is above 25 with +DI leading, which supports trend persistence.")
     contributions["momentum"] = momentum
 
     relative = 5.0
     spy_perf = _snapshot_perf(market, "SPY")
     qqq_perf = _snapshot_perf(market, "QQQ")
-    benchmark_values = [value for value in [spy_perf, qqq_perf] if not math.isnan(value)]
+    benchmark_values = [value for value in (spy_perf, qqq_perf) if not math.isnan(value)]
     benchmark = float(np.mean(benchmark_values)) if benchmark_values else float("nan")
     if not math.isnan(t["perf20"]) and not math.isnan(benchmark):
         spread = t["perf20"] - benchmark
         relative += float(np.clip(spread, -10, 10))
         if spread >= 3:
-            reasons.append(f"{symbol} 20 日表现强于 SPY/QQQ，存在相对强势")
+            reasons.append(f"{symbol} is outperforming SPY/QQQ over the last 20 sessions.")
         elif spread <= -3:
-            risks.append(f"{symbol} 20 日表现弱于 SPY/QQQ，资金强度不足")
+            risks.append(f"{symbol} is lagging SPY/QQQ over the last 20 sessions.")
     contributions["relative_strength"] = relative
 
     volume = 0.0
     if t["vol_ratio_5"] >= 2.0:
         volume += 12
-        reasons.append("当日量能超过 5 日均量的 2 倍，突破效率较高")
+        reasons.append("Volume is running above twice the 5-day average, which improves breakout confirmation.")
     elif t["vol_ratio"] >= 1.5:
         volume += 10
-        reasons.append("成交量显著高于 20 日均量，信号确认度较高")
+        reasons.append("Volume is clearly above the 20-day average, supporting signal confirmation.")
     elif t["vol_ratio"] >= 1.1:
         volume += 5
-        reasons.append("成交量温和放大")
+        reasons.append("Volume is modestly above average.")
     elif t["vol_ratio_5"] < 0.7:
         volume += 4
-        reasons.append("回调阶段量能低于 5 日均量的 70%，更接近缩量回踩节奏")
+        reasons.append("The pullback is happening on lighter 5-day volume, which fits a constructive retracement.")
     elif t["vol_ratio"] < 0.7:
         volume -= 4
-        risks.append("成交量低于均量，突破确认度不足")
+        risks.append("Volume is below average and the breakout confirmation is weak.")
     contributions["volume"] = volume
 
     vol_opt = 5.0
     if t["atr_pct"] > 6:
         vol_opt -= 6
-        risks.append("ATR 占价格比例偏高，仓位需要收缩")
+        risks.append("ATR as a percent of price is elevated, so position size should stay tighter.")
     if options and options.iv_mid is not None:
         if options.iv_mid >= 0.65:
             vol_opt -= 8
-            risks.append("隐含波动率偏高，事件风险定价较重")
+            risks.append("Implied volatility is elevated, pointing to heavier event risk.")
         elif options.iv_mid <= 0.4:
             vol_opt += 3
     if options and options.put_call_vol is not None:
         if options.put_call_vol >= 1.3:
             vol_opt -= 5
-            risks.append("Put/Call 成交量比偏高，期权情绪谨慎")
+            risks.append("Put/Call volume is elevated and options sentiment is cautious.")
         elif options.put_call_vol <= 0.7:
             vol_opt += 4
-            reasons.append("Put/Call 成交量比偏低，期权情绪偏多")
+            reasons.append("Put/Call volume is supportive of a more constructive bias.")
     contributions["volatility_options"] = vol_opt
 
     sentiment = 0.0
     social_score = news.social_sentiment.get("score", 0.0)
     if social_score >= social_sentiment_threshold:
         sentiment += 8
-        reasons.append("公开新闻/社媒标题情绪偏多")
+        reasons.append("Headline and social sentiment remain constructive.")
     elif social_score <= -social_sentiment_threshold:
         sentiment -= 8
-        risks.append("公开新闻/社媒标题情绪偏空")
+        risks.append("Headline and social sentiment are leaning negative.")
     if news.news:
         sentiment += 2
     contributions["news_sentiment"] = sentiment
@@ -377,13 +395,13 @@ def score_components(
     discipline = 0.0
     if t["dist_ma5_pct"] > 5:
         discipline -= 8
-        risks.append("价格相对 MA5 乖离过大，存在追高风险")
+        risks.append("Price is too extended above MA5 and chasing becomes harder to justify.")
     elif 0 <= t["dist_ma5_pct"] <= 2:
         discipline += 4
-        reasons.append("价格距离 MA5 不远，入场节奏更健康")
+        reasons.append("Price is still close to MA5, keeping the entry rhythm healthier.")
     if abs(t["dist_ma10_pct"]) <= 2:
         discipline += 3
-        reasons.append("价格贴近 MA10，回踩支撑区更清晰")
+        reasons.append("Price is still close to MA10, which keeps the pullback support clearer.")
     contributions["discipline"] = discipline
 
     sector = 0.0
@@ -391,10 +409,10 @@ def score_components(
     qqq_perf = _snapshot_perf(market, "QQQ")
     if symbol in {"NVDA", "AMD", "MU", "SMH"} and not math.isnan(smh_perf) and smh_perf > 0:
         sector += 4
-        reasons.append("半导体板块保持强势，板块共振有利于个股延续")
-    if symbol in {"NVDA", "TSLA", "AAPL", "QQQ"} and not math.isnan(qqq_perf) and qqq_perf > 0:
+        reasons.append("SMH sector strength is supporting semiconductor follow-through.")
+    if symbol in {"NVDA", "TSLA", "AAPL", "QQQ", "MSFT"} and not math.isnan(qqq_perf) and qqq_perf > 0:
         sector += 3
-        reasons.append("科技成长方向未明显转弱，提升顺势交易胜率")
+        reasons.append("QQQ remains constructive, which helps growth exposure.")
     contributions["sector_resonance"] = sector
 
     event_risk = 0.0
@@ -403,21 +421,20 @@ def score_components(
         event_risk += 4
     elif recommendation in {"sell", "underperform"}:
         event_risk -= 8
-        risks.append("分析师一致预期偏弱，不支持激进加仓")
+        risks.append("Street expectations are not aligned with aggressive upside exposure.")
     if fundamentals.revenue_growth is not None and fundamentals.revenue_growth < 0:
         event_risk -= 4
-        risks.append("收入增长为负，基本面动能需要重新确认")
+        risks.append("Revenue growth is negative and the fundamental impulse needs more proof.")
     contributions["event_risk"] = event_risk
 
     market_score = float(np.clip(market.score, -15, 15))
     contributions["market_environment"] = market_score
-    if market.label == "风险偏好":
-        reasons.append("市场过滤显示风险偏好较好")
-    elif market.label == "风险规避":
-        risks.append("市场过滤处于风险规避状态，降低进攻性")
+    if market.label == MARKET_RISK_ON:
+        reasons.append("The market filter remains in a risk-on state.")
+    elif market.label == MARKET_RISK_OFF:
+        risks.append("The market filter is in risk-off mode and reduces aggressive execution.")
 
-    base = 35.0
-    contributions["base"] = base
+    contributions["base"] = 35.0
     return contributions, reasons, risks
 
 
@@ -430,11 +447,10 @@ def choose_signal_type(
     config: AppConfig,
 ) -> tuple[str, str]:
     setup_type = classify_setup(tech, intraday, score, config)
-    action, suppressed_by = apply_action_policy(setup_type, score, market, news, config)
+    action, _suppressed = apply_action_policy(setup_type, score, market, news, config)
     if action in ACTIONABLE_ACTIONS:
         preview_plan = preview_trade_plan(action, tech, config)
         if preview_plan.rr < config.min_rr and preview_plan.position_pct > 0:
-            suppressed_by.append("rr_below_min")
             action = "WATCH"
     return ACTION_TO_SIGNAL_TYPE[action], ACTION_TO_ALERT_KIND[action]
 
@@ -488,7 +504,7 @@ def apply_action_policy(
     action = SETUP_TO_ACTION[setup_type]
     suppressed_by: list[str] = []
 
-    if action in ACTIONABLE_ACTIONS and market.label == "风险规避" and score < config.alert_score_threshold + 5:
+    if action in ACTIONABLE_ACTIONS and market.label == MARKET_RISK_OFF and score < config.alert_score_threshold + 5:
         suppressed_by.append("market_risk_off")
         return "WAIT", suppressed_by
 
@@ -518,40 +534,40 @@ def _build_trade_plan(action: str, tech: TechSnapshot, config: AppConfig) -> Tra
     if action == "BUY_TRIGGER":
         entry_low = last
         entry_high = last + 0.25 * atr14
-        trigger = "日线收盘维持 20 日高点附近，盘中量比不低于 1.1"
-        cancel = "收盘跌回 SMA20 下方或市场过滤转为风险规避"
+        trigger = "Breakout closes near the 20-day high with intraday volume holding above 1.1x."
+        cancel = "Close back below SMA20 or the market filter flips risk-off."
     elif action == "ADD_TRIGGER":
         entry_low = max(0.01, t["sma20"] - 0.25 * atr14)
         entry_high = t["sma20"] + 0.25 * atr14
-        trigger = "价格回踩 SMA20 附近后企稳，RSI 不跌破 42"
-        cancel = "收盘跌破 SMA20 且 MACD 柱体继续走弱"
+        trigger = "Price stabilizes near SMA20 while RSI stays above 42."
+        cancel = "Close below SMA20 with MACD histogram still weakening."
     elif action == "WATCH":
         return _non_actionable_plan(
             plan_kind="watch",
-            entry_zone="观察为主，不新增仓位",
-            trigger="等待突破或回踩重新确认后再评估",
-            cancel="跌破关键均线或评分继续走弱",
+            entry_zone="Observation only. No fresh size yet.",
+            trigger="Wait for a cleaner breakout or a healthier pullback reset.",
+            cancel="Drop below key support or lose relative strength further.",
         )
     elif action == "RISK_REDUCE":
         return _non_actionable_plan(
             plan_kind="reduce",
-            entry_zone="以减仓控风险为主",
-            trigger="控制风险，避免新增仓位",
-            cancel="重新站上关键均线且评分恢复",
+            entry_zone="Risk management only.",
+            trigger="Reduce exposure and avoid adding fresh size.",
+            cancel="Trend repairs and conviction improves again.",
         )
     elif action == "REJECT":
         return _non_actionable_plan(
             plan_kind="reject",
-            entry_zone="信号被否决，不执行买入计划",
-            trigger="等待否决条件消退后再重新评估",
-            cancel="无",
+            entry_zone="Rejected. No executable long plan.",
+            trigger="Reassess after the blocking condition clears.",
+            cancel="None.",
         )
     else:
         return _non_actionable_plan(
             plan_kind="wait",
-            entry_zone="等待更清晰的趋势或市场确认",
-            trigger="等待更清晰的趋势、量能或市场环境确认",
-            cancel="无",
+            entry_zone="Wait for a cleaner trend and stronger confirmation.",
+            trigger="Wait for the setup, market, and volume confirmation to align.",
+            cancel="None.",
         )
 
     entry_mid = (entry_low + entry_high) / 2
@@ -601,15 +617,33 @@ def enforce_portfolio_heat(results: list[SignalResult], max_heat_pct: float) -> 
             result.position_pct, result.max_loss_pct, max(0.0, heat_left)
         )
         if new_loss < result.max_loss_pct:
-            result.risks.append("组合风险预算不足，建议仓位已按 portfolio heat 上限收缩")
+            warning = "Portfolio heat is tight, so the suggested position has been trimmed."
+            result.risks.append(warning)
+            result.portfolio_warnings.append(warning)
             result.position_pct = new_position
             result.max_loss_pct = new_loss
             result.trade_plan.position_pct = new_position
             result.trade_plan.max_loss_pct = new_loss
             if result.trade_plan.account_equity is not None:
                 result.trade_plan.position_value = result.trade_plan.account_equity * new_position / 100
+            refresh_signal_result(result)
         heat_left -= result.max_loss_pct
     return results
+
+
+def annotate_signal_result(result: SignalResult, market: MarketContext) -> SignalResult:
+    result.rating = ACTION_TO_RATING.get(result.action, "Hold")
+    result.market_evidence = _derive_market_evidence(result, market)
+    result.bull_case = _derive_bull_case(result)
+    result.bear_case = _derive_bear_case(result)
+    refresh_signal_result(result)
+    return result
+
+
+def refresh_signal_result(result: SignalResult) -> SignalResult:
+    result.conviction_level = _conviction_level(result)
+    result.decision_balance = _decision_balance(result)
+    return result
 
 
 def _snapshot_perf(market: MarketContext, symbol: str) -> float:
@@ -640,18 +674,14 @@ def _result(
     last_price: Optional[float],
     warnings: Optional[list[str]] = None,
     rejection_reasons: Optional[list[str]] = None,
+    validation_warnings: Optional[list[str]] = None,
 ) -> SignalResult:
     hash_input = f"{symbol}|{action}|{score}|{plan.entry_zone}|{plan.stop}|{plan.targets}"
     signal_hash = hashlib.sha1(hash_input.encode("utf-8")).hexdigest()[:12]
     return SignalResult(
         rank=rank,
         symbol=symbol,
-        setup_type=setup_type,
         signal_type=signal_type,
-        action=action,
-        is_actionable=is_actionable,
-        suppressed_by=suppressed_by,
-        plan_kind=plan_kind,
         score=score,
         market_regime=market_regime,
         entry_zone=plan.entry_zone,
@@ -668,15 +698,16 @@ def _result(
         last_price=last_price,
         warnings=warnings or [],
         rejection_reasons=rejection_reasons or [],
+        setup_type=setup_type,
+        action=action,
+        is_actionable=is_actionable,
+        suppressed_by=suppressed_by,
+        plan_kind=plan_kind,
+        validation_warnings=validation_warnings or [],
     )
 
 
-def _non_actionable_plan(
-    plan_kind: str,
-    entry_zone: str,
-    trigger: str,
-    cancel: str,
-) -> TradePlan:
+def _non_actionable_plan(plan_kind: str, entry_zone: str, trigger: str, cancel: str) -> TradePlan:
     return TradePlan(
         entry_zone=entry_zone,
         stop="NA",
@@ -689,3 +720,80 @@ def _non_actionable_plan(
         account_equity=None,
         position_value=None,
     )
+
+
+def _derive_market_evidence(result: SignalResult, market: MarketContext) -> list[str]:
+    evidence = _top_unique(
+        [item for item in result.reasons if any(marker in item for marker in MARKET_EVIDENCE_MARKERS)]
+        + market.reasons[:2]
+    )
+    if evidence:
+        return evidence[:2]
+    return [f"Market regime is {market.label} with score {market.score:+.1f}."]
+
+
+def _derive_bull_case(result: SignalResult) -> list[str]:
+    if result.action == "RISK_REDUCE":
+        return []
+    candidates = list(result.reasons)
+    if result.action in ACTIONABLE_ACTIONS:
+        candidates = candidates[:2]
+    else:
+        candidates = candidates[:1]
+    if candidates:
+        return candidates
+    if result.action in ACTIONABLE_ACTIONS:
+        return ["Enough aligned evidence remains for an actionable setup."]
+    return ["No strong upside edge is ready for fresh execution."]
+
+
+def _derive_bear_case(result: SignalResult) -> list[str]:
+    candidates = _top_unique(result.validation_warnings + result.rejection_reasons + result.risks)
+    if candidates:
+        return candidates[:2]
+    if result.action == "BUY_TRIGGER":
+        return ["The breakout still needs to hold after entry."]
+    if result.action == "ADD_TRIGGER":
+        return ["The pullback can fail if support breaks too quickly."]
+    if result.action == "RISK_REDUCE":
+        return ["Risk control takes priority while trend durability is weaker."]
+    return ["No clean execution edge is available right now."]
+
+
+def _conviction_level(result: SignalResult) -> str:
+    if result.action == "REJECT":
+        return "low"
+    if result.portfolio_warnings or len(result.validation_warnings) >= 2:
+        return "low"
+    if result.action in ACTIONABLE_ACTIONS and result.score >= 80 and not result.validation_warnings:
+        return "high"
+    if result.action in ACTIONABLE_ACTIONS and result.score >= 65:
+        return "medium"
+    if result.action == "RISK_REDUCE":
+        return "medium"
+    return "low"
+
+
+def _decision_balance(result: SignalResult) -> str:
+    if result.action == "REJECT":
+        return "blocked"
+    if result.action == "RISK_REDUCE":
+        return "defensive"
+    if result.action in ACTIONABLE_ACTIONS and result.validation_warnings:
+        return "fragile"
+    if result.action in ACTIONABLE_ACTIONS and result.bear_case:
+        return "mixed"
+    if result.action in ACTIONABLE_ACTIONS:
+        return "favorable"
+    return "mixed"
+
+
+def _top_unique(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for item in items:
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        ordered.append(item)
+    return ordered

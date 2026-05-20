@@ -1,18 +1,30 @@
-﻿# Version Control
+# Version Control
 
 ## Current Version
 
-- Version: `2.4.0`
-- Date: `2026-04-26`
-- Status: Added trade-plan validation and upgraded daily briefs into a trading decision format
+- Version: `2.5.0`
+- Date: `2026-05-03`
+- Status: Added decision-layer strategy upgrades, portfolio approval, decision memory, and a new morning-brief format
 
 ## Versioning Rules
 
 - `MAJOR`: signal model, state schema, report contract, or risk model changes that may affect trading decisions.
-- `MINOR`: new data source, indicator, report section, backtest metric, or configuration option.
+- `MINOR`: new data source, indicator, report section, decision layer, or configuration option.
 - `PATCH`: bug fix, test improvement, copy update, or operational hardening with no decision-model change.
 
 ## Changelog
+
+### 2.5.0
+
+- Added explicit strategy-thesis fields to `SignalResult`, including `rating`, `bull_case`, `bear_case`, `market_evidence`, `conviction_level`, and `decision_balance`.
+- Added a rules-based `decision_manager.py` layer to approve, defer, or reject candidate trades at the portfolio level before daily-brief presentation.
+- Added `portfolio_decision`, `portfolio_reason`, `validation_warnings`, and `portfolio_warnings` so approved ideas, deferred ideas, and constrained ideas can be explained directly in reports.
+- Added `memory.py` and a persistent decision log with 5-day outcome backfill support for post-trade review using existing market data.
+- Rebuilt the daily brief into a faster morning-brief format with `Executive Summary`, `Market Filter`, `Top Actions`, `Watchlist`, `Risk Actions`, `Rejected Plans`, and `System Notes`.
+- Reworked alert emails so entry alerts and risk alerts share the same action-plus-reason language as the daily brief.
+- Added `ENABLE_RISK_ALERTS`, `MEMORY_LOG_PATH`, and `DECISION_MEMORY_HOLDING_DAYS` configuration support.
+- Hardened decision-log behavior so missing `yfinance` no longer breaks report generation or test collection.
+- Added coverage for decision-manager ranking, decision-memory persistence and outcome resolution, updated reporting output, and alert flow regressions.
 
 ### 2.4.0
 

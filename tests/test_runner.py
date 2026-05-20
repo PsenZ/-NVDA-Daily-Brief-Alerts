@@ -10,6 +10,7 @@ def test_force_daily_report_sends_without_updating_daily_state(monkeypatch):
     sent = []
     monkeypatch.setattr("veyraquant.runner.compose_daily_report", lambda *args: ("subject", "body"))
     monkeypatch.setattr("veyraquant.runner.send_email", lambda smtp, subject, body: sent.append(subject))
+    monkeypatch.setattr("veyraquant.runner.sync_decision_log", lambda *args, **kwargs: None)
 
     now_dt = datetime(2026, 4, 22, 2, 15, tzinfo=SYDNEY_TZ)
     state = migrate_state({})
@@ -20,9 +21,11 @@ def test_force_daily_report_sends_without_updating_daily_state(monkeypatch):
         send_minute=30,
         send_window_minutes=30,
         smtp=object(),
+        memory_log_path="memory/test.jsonl",
+        decision_memory_holding_days=5,
     )
 
-    did_send, changed_state = maybe_send_daily_report(state, now_dt, [], None, config)
+    did_send, changed_state = maybe_send_daily_report(state, now_dt, [], None, [], config)
 
     assert did_send
     assert not changed_state
@@ -33,6 +36,7 @@ def test_force_daily_report_sends_without_updating_daily_state(monkeypatch):
 def test_force_daily_report_ignores_already_sent_today(monkeypatch):
     monkeypatch.setattr("veyraquant.runner.compose_daily_report", lambda *args: ("subject", "body"))
     monkeypatch.setattr("veyraquant.runner.send_email", lambda *args: None)
+    monkeypatch.setattr("veyraquant.runner.sync_decision_log", lambda *args, **kwargs: None)
 
     now_dt = datetime(2026, 4, 22, 8, 0, tzinfo=SYDNEY_TZ)
     state = migrate_state({})
@@ -44,9 +48,11 @@ def test_force_daily_report_ignores_already_sent_today(monkeypatch):
         send_minute=30,
         send_window_minutes=30,
         smtp=object(),
+        memory_log_path="memory/test.jsonl",
+        decision_memory_holding_days=5,
     )
 
-    did_send, changed_state = maybe_send_daily_report(state, now_dt, [], None, config)
+    did_send, changed_state = maybe_send_daily_report(state, now_dt, [], None, [], config)
 
     assert did_send
     assert not changed_state
@@ -218,14 +224,19 @@ def test_risk_reduce_does_not_send_when_risk_alerts_disabled(monkeypatch):
         rank=3,
         symbol="TSLA",
         alert_kind="risk_reduce",
-        signal_type="减仓/风险升高",
+        signal_type="risk",
         score=38,
-        market_regime="风险偏好",
-        reasons=["趋势转弱"],
-        risks=["跌破 SMA20"],
+        market_regime="risk-on",
+        reasons=["trend weakens"],
+        risks=["lost SMA20"],
+        bear_case=["lost SMA20"],
+        market_evidence=["QQQ momentum is fading."],
+        portfolio_reason="Reduce exposure and avoid adding risk.",
         is_actionable=False,
         action="RISK_REDUCE",
         signal_hash="risk-1",
+        rating="Underweight",
+        setup_type="risk_reduce",
     )
     config = SimpleNamespace(
         entry_alerts_enabled=True,
@@ -256,19 +267,24 @@ def test_risk_reduce_sends_when_risk_alerts_enabled(monkeypatch):
         rank=3,
         symbol="TSLA",
         alert_kind="risk_reduce",
-        signal_type="减仓/风险升高",
+        signal_type="risk",
         score=38,
-        market_regime="风险偏好",
-        reasons=["趋势转弱"],
-        risks=["跌破 SMA20"],
+        market_regime="risk-on",
+        reasons=["trend weakens"],
+        risks=["lost SMA20"],
+        bear_case=["lost SMA20"],
+        market_evidence=["QQQ momentum is fading."],
+        portfolio_reason="Reduce exposure and avoid adding risk.",
         is_actionable=False,
         action="RISK_REDUCE",
         signal_hash="risk-1",
-        entry_zone="不适用",
+        entry_zone="NA",
         stop="NA",
         targets="NA",
         position_pct=0.0,
         max_loss_pct=0.0,
+        rating="Underweight",
+        setup_type="risk_reduce",
     )
     config = SimpleNamespace(
         entry_alerts_enabled=True,
@@ -289,7 +305,7 @@ def test_risk_reduce_sends_when_risk_alerts_enabled(monkeypatch):
     assert sent_any
     assert len(sent) == 1
     subject, body = sent[0]
-    assert "风险提醒" in subject
+    assert "Risk Alert" in subject
     assert "No buy/add trade plan is attached to this risk alert." in body
     assert "entry_zone:" not in body
 

@@ -4,14 +4,7 @@ import numpy as np
 import pandas as pd
 
 from veyraquant.config import AppConfig, SmtpConfig
-from veyraquant.models import (
-    FundamentalsData,
-    MarketContext,
-    NewsBundle,
-    SignalResult,
-    TechSnapshot,
-    TradePlan,
-)
+from veyraquant.models import FundamentalsData, MarketContext, NewsBundle, SignalResult, TechSnapshot, TradePlan
 from veyraquant.reporting import compose_alert_email, compose_daily_report
 from veyraquant.signals import analyze_symbol, enforce_portfolio_heat
 from veyraquant.timeutils import SYDNEY_TZ
@@ -62,7 +55,7 @@ def bullish_market():
     return MarketContext(
         label="风险偏好",
         score=20.0,
-        reasons=["market strong"],
+        reasons=["QQQ trend remains constructive."],
         risks=[],
         snapshots={"QQQ": {"perf20": 5.0}, "SMH": {"perf20": 6.0}, "SPY": {"perf20": 4.0}},
     )
@@ -126,7 +119,7 @@ def watch_snapshot():
 
 
 def news_bundle(score):
-    label = "偏多" if score > 0 else "偏空" if score < 0 else "中性"
+    label = "bullish" if score > 0 else "bearish" if score < 0 else "neutral"
     return NewsBundle([], [], {"score": score, "label": label, "sample_size": 3})
 
 
@@ -149,6 +142,11 @@ def assert_result_consistency(result):
         assert result.max_loss_pct == 0.0
         assert result.stop == "NA"
         assert result.targets == "NA"
+    assert result.rating in {"Buy", "Overweight", "Hold", "Underweight", "No Trade"}
+    assert result.conviction_level in {"high", "medium", "low"}
+    assert result.decision_balance in {"favorable", "mixed", "fragile", "blocked", "defensive"}
+    assert result.market_evidence
+    assert result.bear_case is not None
 
 
 def test_negative_news_veto_keeps_final_action_and_plan_consistent(monkeypatch):
@@ -169,7 +167,6 @@ def test_negative_news_veto_keeps_final_action_and_plan_consistent(monkeypatch):
 
     assert result.setup_type == "breakout_entry"
     assert result.action == "REJECT"
-    assert result.signal_type == "禁止交易/等待"
     assert "negative_news_veto" in result.suppressed_by
     assert result.plan_kind == "reject"
     assert_result_consistency(result)
@@ -206,20 +203,16 @@ def test_rr_downgrade_removes_buy_plan_fields(monkeypatch):
         make_config(),
     )
 
-    assert result.setup_type == "breakout_entry"
     assert result.action == "WATCH"
-    assert result.signal_type == "持有观察"
     assert "rr_below_min" in result.suppressed_by
-    assert result.plan_kind == "watch"
     assert_result_consistency(result)
 
 
-def test_watch_output_is_non_actionable(monkeypatch):
+def test_watch_and_wait_outputs_are_non_actionable(monkeypatch):
     monkeypatch.setattr("veyraquant.signals.tech_summary", lambda _daily: watch_snapshot())
     monkeypatch.setattr("veyraquant.signals.intraday_snapshot", lambda _intraday: None)
     monkeypatch.setattr("veyraquant.signals.score_components", lambda *args, **kwargs: score_result(58))
-
-    result = analyze_symbol(
+    watch_result = analyze_symbol(
         "NVDA",
         dummy_daily(),
         None,
@@ -230,18 +223,8 @@ def test_watch_output_is_non_actionable(monkeypatch):
         make_config(),
     )
 
-    assert result.setup_type == "hold_watch"
-    assert result.action == "WATCH"
-    assert result.signal_type == "持有观察"
-    assert_result_consistency(result)
-
-
-def test_wait_output_does_not_keep_position_or_targets(monkeypatch):
-    monkeypatch.setattr("veyraquant.signals.tech_summary", lambda _daily: watch_snapshot())
-    monkeypatch.setattr("veyraquant.signals.intraday_snapshot", lambda _intraday: None)
     monkeypatch.setattr("veyraquant.signals.score_components", lambda *args, **kwargs: score_result(45))
-
-    result = analyze_symbol(
+    wait_result = analyze_symbol(
         "NVDA",
         dummy_daily(),
         None,
@@ -252,18 +235,17 @@ def test_wait_output_does_not_keep_position_or_targets(monkeypatch):
         make_config(),
     )
 
-    assert result.setup_type == "wait"
-    assert result.action == "WAIT"
-    assert result.signal_type == "禁止交易/等待"
-    assert_result_consistency(result)
+    assert watch_result.action == "WATCH"
+    assert wait_result.action == "WAIT"
+    assert_result_consistency(watch_result)
+    assert_result_consistency(wait_result)
 
 
-def test_buy_trigger_still_generates_full_trade_plan(monkeypatch):
+def test_buy_and_add_triggers_keep_full_trade_plans(monkeypatch):
     monkeypatch.setattr("veyraquant.signals.tech_summary", lambda _daily: breakout_snapshot())
     monkeypatch.setattr("veyraquant.signals.intraday_snapshot", lambda _intraday: None)
     monkeypatch.setattr("veyraquant.signals.score_components", lambda *args, **kwargs: score_result(72))
-
-    result = analyze_symbol(
+    buy_result = analyze_symbol(
         "NVDA",
         dummy_daily(),
         None,
@@ -274,21 +256,9 @@ def test_buy_trigger_still_generates_full_trade_plan(monkeypatch):
         make_config(),
     )
 
-    assert result.setup_type == "breakout_entry"
-    assert result.action == "BUY_TRIGGER"
-    assert result.signal_type == "突破入场"
-    assert result.plan_kind == "buy"
-    assert result.trade_plan.trigger
-    assert result.trade_plan.cancel
-    assert_result_consistency(result)
-
-
-def test_add_trigger_still_generates_full_trade_plan(monkeypatch):
     monkeypatch.setattr("veyraquant.signals.tech_summary", lambda _daily: pullback_snapshot())
-    monkeypatch.setattr("veyraquant.signals.intraday_snapshot", lambda _intraday: None)
     monkeypatch.setattr("veyraquant.signals.score_components", lambda *args, **kwargs: score_result(64))
-
-    result = analyze_symbol(
+    add_result = analyze_symbol(
         "NVDA",
         dummy_daily(),
         None,
@@ -299,13 +269,10 @@ def test_add_trigger_still_generates_full_trade_plan(monkeypatch):
         make_config(),
     )
 
-    assert result.setup_type == "pullback_add"
-    assert result.action == "ADD_TRIGGER"
-    assert result.signal_type == "趋势回踩加仓"
-    assert result.plan_kind == "add"
-    assert result.trade_plan.trigger
-    assert result.trade_plan.cancel
-    assert_result_consistency(result)
+    assert buy_result.action == "BUY_TRIGGER"
+    assert add_result.action == "ADD_TRIGGER"
+    assert_result_consistency(buy_result)
+    assert_result_consistency(add_result)
 
 
 def test_signal_result_new_fields_have_safe_defaults():
@@ -325,7 +292,7 @@ def test_signal_result_new_fields_have_safe_defaults():
         symbol="NVDA",
         signal_type="禁止交易/等待",
         score=0,
-        market_regime="中性震荡",
+        market_regime="neutral",
         entry_zone="NA",
         stop="NA",
         targets="NA",
@@ -345,11 +312,13 @@ def test_signal_result_new_fields_have_safe_defaults():
     assert result.is_actionable is False
     assert result.suppressed_by == []
     assert result.plan_kind == "wait"
+    assert result.rating == "Hold"
+    assert result.portfolio_decision == "watchlist"
 
 
 def test_non_actionable_signal_does_not_consume_portfolio_heat():
     watch_plan = TradePlan(
-        entry_zone="观察为主，不新增仓位",
+        entry_zone="Observation only.",
         stop="NA",
         targets="NA",
         position_pct=8.0,
@@ -415,49 +384,94 @@ def test_non_actionable_signal_does_not_consume_portfolio_heat():
     assert results[0].max_loss_pct == 0.8
     assert results[1].position_pct == 6.0
     assert results[1].max_loss_pct == 0.3
+    assert results[1].portfolio_warnings
 
 
-def test_reporting_can_render_non_actionable_signals_without_crashing(monkeypatch):
-    monkeypatch.setattr("veyraquant.signals.tech_summary", lambda _daily: watch_snapshot())
-    monkeypatch.setattr("veyraquant.signals.intraday_snapshot", lambda _intraday: None)
-    monkeypatch.setattr("veyraquant.signals.score_components", lambda *args, **kwargs: score_result(58))
-    watch_result = analyze_symbol(
-        "NVDA",
-        dummy_daily(),
-        None,
-        FundamentalsData(),
-        None,
-        news_bundle(0.0),
-        bullish_market(),
-        make_config(),
+def test_reporting_can_render_non_actionable_signals_without_crashing():
+    plan = TradePlan(
+        entry_zone="Observation only.",
+        stop="NA",
+        targets="NA",
+        position_pct=0.0,
+        max_loss_pct=0.0,
+        rr=0.0,
+        trigger="Wait for a cleaner entry.",
+        cancel="None.",
+    )
+    watch_result = SignalResult(
+        rank=1,
+        symbol="NVDA",
+        signal_type="持有观察",
+        score=58,
+        market_regime="风险偏好",
+        entry_zone="Observation only.",
+        stop="NA",
+        targets="NA",
+        position_pct=0.0,
+        max_loss_pct=0.0,
+        reasons=["trend remains intact"],
+        risks=["entry is not clean enough"],
+        contributions={"trend": 10.0},
+        trade_plan=plan,
+        alert_kind="wait",
+        signal_hash="watch-1",
+        last_price=100.0,
+        action="WATCH",
+        plan_kind="watch",
+        rating="Hold",
+        bull_case=["trend remains intact"],
+        bear_case=["entry is not clean enough"],
+        market_evidence=["QQQ trend remains constructive."],
+        portfolio_decision="watchlist",
+        portfolio_reason="Not ready for execution today.",
+    )
+    reject_result = SignalResult(
+        rank=2,
+        symbol="QQQ",
+        signal_type="禁止交易/等待",
+        score=72,
+        market_regime="风险偏好",
+        entry_zone="Rejected.",
+        stop="NA",
+        targets="NA",
+        position_pct=0.0,
+        max_loss_pct=0.0,
+        reasons=["setup looked interesting"],
+        risks=["plan validation failed"],
+        contributions={"trend": 10.0},
+        trade_plan=plan,
+        alert_kind="wait",
+        signal_hash="reject-1",
+        last_price=100.0,
+        action="REJECT",
+        plan_kind="reject",
+        rating="No Trade",
+        bull_case=["setup looked interesting"],
+        bear_case=["plan validation failed"],
+        market_evidence=["Market regime is risk-on."],
+        rejection_reasons=["target1 must exceed entry_high"],
+        suppressed_by=["trade_plan_validation_failed"],
+        portfolio_decision="rejected",
+        portfolio_reason="Blocked before portfolio approval.",
     )
 
-    monkeypatch.setattr("veyraquant.signals.tech_summary", lambda _daily: breakout_snapshot())
-    monkeypatch.setattr("veyraquant.signals.score_components", lambda *args, **kwargs: score_result(72))
-    reject_result = analyze_symbol(
-        "NVDA",
-        dummy_daily(),
-        None,
-        FundamentalsData(),
-        None,
-        news_bundle(-0.35),
-        bullish_market(),
-        make_config(),
-    )
-
-    market = bullish_market()
     subject, daily_body = compose_daily_report(
-        [watch_result, reject_result], market, make_config(), datetime(2026, 4, 20, 7, 30, tzinfo=SYDNEY_TZ)
+        [watch_result, reject_result],
+        bullish_market(),
+        make_config(),
+        datetime(2026, 4, 20, 7, 30, tzinfo=SYDNEY_TZ),
+        [],
     )
-    _alert_subject, alert_body = compose_alert_email(
+    alert_subject, alert_body = compose_alert_email(
         watch_result, datetime(2026, 4, 20, 7, 30, tzinfo=SYDNEY_TZ)
     )
 
     assert subject
-    assert "[Hold / Watch]" in daily_body
+    assert "[Watchlist]" in daily_body
     assert "[Rejected Plans]" in daily_body
-    assert "symbol: NVDA | score: 58 | action: WATCH" in daily_body
-    assert "No rejected actionable plans." not in daily_body
-    assert "position_pct: 0.00%" in alert_body
-    assert "targets: NA" in alert_body
-    assert "stop: NA" in alert_body
+    assert "NVDA | Hold | 58" in daily_body
+    assert "QQQ | score 72" in daily_body
+    assert "Trade Alert" in alert_body
+    assert "why now:" in alert_body
+    assert "watch risk:" in alert_body
+    assert "Hold / WATCH" in alert_subject

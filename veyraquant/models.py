@@ -101,3 +101,13 @@ class SignalResult:
     is_actionable: bool = False
     suppressed_by: list[str] = field(default_factory=list)
     plan_kind: str = "wait"
+    rating: str = "Hold"
+    bull_case: list[str] = field(default_factory=list)
+    bear_case: list[str] = field(default_factory=list)
+    market_evidence: list[str] = field(default_factory=list)
+    conviction_level: str = "low"
+    decision_balance: str = "mixed"
+    validation_warnings: list[str] = field(default_factory=list)
+    portfolio_warnings: list[str] = field(default_factory=list)
+    portfolio_decision: str = "watchlist"
+    portfolio_reason: str = ""

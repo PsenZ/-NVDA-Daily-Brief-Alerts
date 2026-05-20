@@ -5,14 +5,6 @@ from .models import MarketContext, SignalResult
 from .timeutils import US_EASTERN_TZ
 
 
-ACTIONABLE_ACTIONS = {"BUY_TRIGGER", "ADD_TRIGGER"}
-WATCH_ACTIONS = {"HOLD", "WATCH", "WAIT"}
-RISK_ACTIONS = {"AVOID_CHASE", "RISK_REDUCE"}
-VALIDATION_WARNING_MARKERS = ("warning threshold",)
-PORTFOLIO_HEAT_WARNING_MARKERS = ("portfolio heat",)
-AVOID_CHASE_MARKERS = ("追高", "chase")
-
-
 def format_money(value) -> str:
     if value is None:
         return "NA"
@@ -42,175 +34,149 @@ def compose_daily_report(
     market: MarketContext,
     config: AppConfig,
     now_dt: datetime,
+    portfolio_notes: list[str] | None = None,
 ) -> tuple[str, str]:
     subject = f"{config.subject_prefix} - {now_dt.strftime('%Y-%m-%d')}"
     dual_time = format_dual_time(now_dt)
 
-    actionable = [item for item in results if _action(item) in ACTIONABLE_ACTIONS and _is_actionable(item)]
-    actionable = actionable[:3]
-    hold_watch = [item for item in results if _action(item) in WATCH_ACTIONS]
-    avoid_or_reduce = [
-        item for item in results if _action(item) == "RISK_REDUCE" or _is_avoid_chase(item)
+    approved = [item for item in results if item.portfolio_decision == "approved"][:3]
+    watchlist = [
+        item
+        for item in results
+        if item.portfolio_decision in {"watchlist", "deferred"} and item.action not in {"RISK_REDUCE", "REJECT"}
     ]
-    rejected = [item for item in results if _action(item) == "REJECT"]
-
-    executable_count = len(actionable)
-    hold_watch_count = len(hold_watch)
-    avoid_chase_count = len(avoid_or_reduce)
-    rejected_count = len(rejected)
+    risk_actions = [item for item in results if item.action == "RISK_REDUCE"]
+    rejected = [item for item in results if item.action == "REJECT"]
+    deferred_count = len([item for item in results if item.portfolio_decision == "deferred"])
 
     lines: list[str] = [
-        f"VeyraQuant Trading Decision Brief",
+        "VeyraQuant Morning Brief",
         f"Time: {dual_time}",
         "",
-        "[Today Conclusion]",
+        "[Executive Summary]",
         f"market_regime: {market.label}",
-        f"trading_posture: {_trading_posture(market, executable_count)}",
+        f"trading_posture: {_trading_posture(market, len(approved))}",
         (
-            f"counts: executable {executable_count} | hold/watch {hold_watch_count} | "
-            f"avoid/reduce {avoid_chase_count} | rejected {rejected_count}"
+            f"approved {len(approved)} | deferred {deferred_count} | "
+            f"watchlist {len(watchlist)} | rejected {len(rejected)}"
         ),
-        _summary_paragraph(
-            market, executable_count, hold_watch_count, avoid_chase_count, rejected_count
-        ),
+        _summary_line(market, approved, deferred_count),
+        _key_risk_line(market, results),
         "",
         "[Market Filter]",
         f"market_score: {market.score:+.1f}",
-        *[f"- {reason}" for reason in market.reasons[:4]],
+        *[f"- {reason}" for reason in market.reasons[:3]],
     ]
-
     if market.risks:
-        lines.extend([*[f"- risk: {risk}" for risk in market.risks[:4]]])
+        lines.extend(f"- risk: {risk}" for risk in market.risks[:2])
     lines.extend(_market_snapshot_lines(market))
 
-    lines.extend(["", "[Action List]"])
-    if not actionable:
-        lines.append("No executable BUY_TRIGGER or ADD_TRIGGER setups today.")
-    for result in actionable:
-        lines.extend(_action_block(result))
+    lines.extend(["", "[Top Actions]"])
+    if not approved:
+        lines.append("No approved trade plans today.")
+    for result in approved:
+        lines.extend(_top_action_block(result))
 
-    lines.extend(["", "[Hold / Watch]"])
-    if not hold_watch:
-        lines.append("No HOLD / WATCH / WAIT items.")
-    for result in hold_watch:
-        lines.extend(_hold_watch_block(result))
+    lines.extend(["", "[Watchlist]"])
+    if not watchlist:
+        lines.append("No watchlist names today.")
+    else:
+        lines.append("symbol | rating | score | next condition | why not now")
+        for result in watchlist:
+            lines.append(_watchlist_row(result))
 
-    lines.extend(["", "[Avoid Chase / Risk Reduce]"])
-    if not avoid_or_reduce:
-        lines.append("No avoid-chase or risk-reduce items.")
-    for result in avoid_or_reduce:
-        lines.extend(_risk_reduce_block(result))
+    lines.extend(["", "[Risk Actions]"])
+    if not risk_actions:
+        lines.append("No active risk-reduction signals today.")
+    for result in risk_actions:
+        lines.extend(_risk_action_block(result))
 
     lines.extend(["", "[Rejected Plans]"])
     if not rejected:
-        lines.append("No rejected actionable plans.")
+        lines.append("No rejected plans today.")
     for result in rejected:
         lines.extend(_rejected_block(result))
 
     lines.extend(["", "[System Notes]"])
-    system_notes = _system_notes(results)
-    if system_notes:
-        lines.extend(system_notes)
+    notes = _system_notes(results, portfolio_notes or [])
+    if notes:
+        lines.extend(notes)
     else:
         lines.append("- No additional system notes.")
     lines.extend(
         [
             "- No broker API. No automatic orders. Every trade plan requires human review.",
-            "- Position sizing follows existing config risk controls and may be reduced by portfolio heat.",
+            "- Position sizing follows existing risk controls and may be reduced by portfolio heat.",
         ]
     )
     return subject, "\n".join(lines)
 
 
 def compose_alert_email(result: SignalResult, now_dt: datetime) -> tuple[str, str]:
-    subject = f"{result.symbol} {result.signal_type} - score {result.score}"
     dual_time = format_dual_time(now_dt)
-    lines = [
-        f"{result.symbol} 机会/风险提醒 ({dual_time})",
-        "",
-        f"rank: {result.rank}",
-        f"symbol: {result.symbol}",
-        f"signal_type: {result.signal_type}",
-        f"score: {result.score}",
-        f"market_regime: {result.market_regime}",
-        f"entry_zone: {result.entry_zone}",
-        f"stop: {result.stop}",
-        f"targets: {result.targets}",
-        f"position_pct: {result.position_pct:.2f}%",
-        f"max_loss_pct: {result.max_loss_pct:.2f}%",
-        f"trigger: {result.trade_plan.trigger}",
-        f"cancel: {result.trade_plan.cancel}",
-    ]
-    if result.trade_plan.position_value is not None:
-        lines.append(f"position_value: ${result.trade_plan.position_value:,.2f}")
+    if result.action == "RISK_REDUCE":
+        subject = f"{result.symbol} Risk Alert - {result.rating} - score {result.score}"
+        lines = [
+            f"{result.symbol} Risk Alert ({dual_time})",
+            "",
+            f"rating/action: {result.rating} / {result.action}",
+            f"score: {result.score}",
+            f"market_regime: {result.market_regime}",
+            f"risk reason: {_compact_summary(result.bear_case or result.risks, 2)}",
+            f"suggested posture: {result.portfolio_reason or 'Reduce exposure and avoid adding new size.'}",
+            f"market evidence: {_compact_summary(result.market_evidence, 1)}",
+            "",
+            "No buy/add trade plan is attached to this risk alert.",
+        ]
+        return subject, "\n".join(lines)
 
-    lines.extend(["", "[score breakdown]"])
-    lines.extend(f"- {key}: {value:+.1f}" for key, value in result.contributions.items())
-    lines.extend(["", "[reasons]", *[f"- {line}" for line in result.reasons]])
-    lines.extend(["", "[risks]", *[f"- {line}" for line in result.risks or ["No major risk note."]]])
+    subject = f"{result.symbol} {result.rating} / {result.action} - score {result.score}"
+    lines = [
+        f"{result.symbol} Trade Alert ({dual_time})",
+        "",
+        f"rating/action: {result.rating} / {result.action}",
+        f"score/setup: {result.score} / {result.setup_type}",
+        f"plan: {result.entry_zone} | stop {result.stop} | targets {result.targets}",
+        f"risk budget: position {result.position_pct:.2f}% | max loss {result.max_loss_pct:.2f}%",
+        f"why now: {_compact_summary(result.bull_case, 2)}",
+        f"watch risk: {_compact_summary(result.bear_case, 2)}",
+        f"market evidence: {_compact_summary(result.market_evidence, 1)}",
+        f"trigger / cancel: {result.trade_plan.trigger} / {result.trade_plan.cancel}",
+    ]
+    if result.validation_warnings:
+        lines.append(f"validation warning: {_compact_summary(result.validation_warnings, 1)}")
     return subject, "\n".join(lines)
 
 
-def _action(result: SignalResult) -> str:
-    if getattr(result, "action", ""):
-        return result.action
-    mapping = {
-        "突破入场": "BUY_TRIGGER",
-        "趋势回踩加仓": "ADD_TRIGGER",
-        "持有观察": "WATCH",
-        "减仓/风险升高": "RISK_REDUCE",
-        "禁止交易/等待": "WAIT",
-    }
-    return mapping.get(result.signal_type, "WAIT")
-
-
-def _setup_type(result: SignalResult) -> str:
-    if getattr(result, "setup_type", ""):
-        return result.setup_type
-    return result.alert_kind or "unknown"
-
-
-def _is_actionable(result: SignalResult) -> bool:
-    return bool(getattr(result, "is_actionable", False))
-
-
-def _is_avoid_chase(result: SignalResult) -> bool:
-    return _contains_any_marker(result.risks, AVOID_CHASE_MARKERS)
-
-
-def _validation_warnings(result: SignalResult) -> list[str]:
-    return _filter_by_markers(result.risks, VALIDATION_WARNING_MARKERS)
-
-
-def _portfolio_heat_warnings(result: SignalResult) -> list[str]:
-    return _filter_by_markers(result.risks, PORTFOLIO_HEAT_WARNING_MARKERS)
-
-
-def _trading_posture(market: MarketContext, executable_count: int) -> str:
-    if market.label == "风险规避":
+def _trading_posture(market: MarketContext, approved_count: int) -> str:
+    if market.label == "\u98ce\u9669\u89c4\u907f":
         return "Defense first"
-    if executable_count > 0:
+    if approved_count > 0:
         return "Selective execution"
-    if market.label == "风险偏好":
-        return "Wait for cleaner entries"
+    if market.label == "\u98ce\u9669\u504f\u597d":
+        return "Stay patient for cleaner entries"
     return "Neutral and patient"
 
 
-def _summary_paragraph(
-    market: MarketContext,
-    executable_count: int,
-    hold_watch_count: int,
-    avoid_chase_count: int,
-    rejected_count: int,
-) -> str:
-    if executable_count:
-        lead = f"{executable_count} executable setup(s) survived filters."
-    else:
-        lead = "No executable setup cleared the final filter."
-    return (
-        f"{lead} {hold_watch_count} name(s) stay on watch, "
-        f"{avoid_chase_count} sit in risk-control, and {rejected_count} were rejected."
-    )
+def _summary_line(market: MarketContext, approved: list[SignalResult], deferred_count: int) -> str:
+    if approved:
+        leaders = ", ".join(item.symbol for item in approved[:2])
+        return (
+            f"The board is constructive enough to approve {len(approved)} trade plan(s), "
+            f"led by {leaders}, while {deferred_count} candidate(s) remain on hold."
+        )
+    if market.label == "\u98ce\u9669\u89c4\u907f":
+        return "The board stays defensive today and fresh execution should remain tightly filtered."
+    return "No plan earned full approval today, so the focus shifts to watching for better alignment."
+
+
+def _key_risk_line(market: MarketContext, results: list[SignalResult]) -> str:
+    candidate_risks = list(market.risks)
+    for result in results:
+        if result.validation_warnings:
+            candidate_risks.extend(result.validation_warnings)
+        candidate_risks.extend(result.bear_case[:1])
+    return f"key_risk: {_compact_summary(candidate_risks, 1)}"
 
 
 def _market_snapshot_lines(market: MarketContext) -> list[str]:
@@ -228,7 +194,7 @@ def _market_snapshot_lines(market: MarketContext) -> list[str]:
                 lines.append(f"- ^VIX: last {float(last):.2f}")
             continue
         pieces = []
-        for key in ["last", "sma20", "sma50", "perf20"]:
+        for key in ("last", "sma20", "sma50", "perf20"):
             value = snapshot.get(key)
             if value is None:
                 continue
@@ -241,94 +207,85 @@ def _market_snapshot_lines(market: MarketContext) -> list[str]:
     return lines
 
 
-def _action_block(result: SignalResult) -> list[str]:
-    validation_warnings = _validation_warnings(result)
-    risk_summary = _compact_summary(result.risks, limit=2, exclude=validation_warnings)
+def _top_action_block(result: SignalResult) -> list[str]:
     lines = [
         "",
         f"## {result.symbol}",
-        f"action: {_action(result)} | score: {result.score} | setup: {_setup_type(result)}",
+        f"rating/action: {result.rating} / {result.action}",
+        f"score/setup: {result.score} / {result.setup_type}",
         f"plan: {result.entry_zone} | stop {result.stop} | targets {result.targets}",
-        f"risk: position {result.position_pct:.2f}% | max_loss {result.max_loss_pct:.2f}%",
-        f"trigger: {result.trade_plan.trigger}",
-        f"cancel: {result.trade_plan.cancel}",
-        f"reasons: {_compact_summary(result.reasons, limit=3)}",
-        f"risks: {risk_summary}",
+        f"risk budget: position {result.position_pct:.2f}% | max loss {result.max_loss_pct:.2f}%",
+        f"why now: {_compact_summary(result.bull_case, 2)}",
+        f"watch risk: {_compact_summary(result.bear_case, 2)}",
+        f"market evidence: {_compact_summary(result.market_evidence, 1)}",
+        f"trigger / cancel: {result.trade_plan.trigger} / {result.trade_plan.cancel}",
     ]
-    if validation_warnings:
-        lines.append(f"validation_warnings: {_compact_summary(validation_warnings, limit=2)}")
+    if result.validation_warnings:
+        lines.append(f"validation warning: {_compact_summary(result.validation_warnings, 1)}")
     return lines
 
 
-def _hold_watch_block(result: SignalResult) -> list[str]:
+def _watchlist_row(result: SignalResult) -> str:
+    next_condition = result.trade_plan.trigger or "Wait for better alignment."
+    why_not_now = result.portfolio_reason or _compact_summary(result.bear_case or result.risks, 1)
+    return (
+        f"{result.symbol} | {result.rating} | {result.score} | "
+        f"{next_condition} | {why_not_now}"
+    )
+
+
+def _risk_action_block(result: SignalResult) -> list[str]:
     return [
         "",
-        f"symbol: {result.symbol} | score: {result.score} | action: {_action(result)} | next: {result.trade_plan.trigger}",
-        f"summary: {_reason_summary(result)}",
+        f"{result.symbol} | {result.rating} | score {result.score}",
+        f"risk reason: {_compact_summary(result.bear_case or result.risks, 2)}",
+        f"suggested posture: {result.portfolio_reason or 'Reduce exposure and avoid adding risk.'}",
     ]
-
-
-def _risk_reduce_block(result: SignalResult) -> list[str]:
-    action = "AVOID_CHASE" if _is_avoid_chase(result) and _action(result) != "RISK_REDUCE" else _action(result)
-    lines = [
-        "",
-        f"symbol: {result.symbol} | score: {result.score} | action: {action}",
-        f"summary: {_reason_summary(result)}",
-    ]
-    risk_lines = result.risks[:2] or ["No additional risk note."]
-    lines.append(f"risks: {_compact_summary(risk_lines, limit=2)}")
-    return lines
 
 
 def _rejected_block(result: SignalResult) -> list[str]:
-    reasons = getattr(result, "rejection_reasons", []) or ["No explicit rejection reason."]
-    suppressed_by = getattr(result, "suppressed_by", []) or ["No suppression metadata."]
     return [
         "",
-        f"symbol: {result.symbol} | score: {result.score}",
-        f"rejection: {_compact_summary(reasons, limit=2)}",
-        f"suppressed_by: {_compact_summary(suppressed_by, limit=2)}",
+        f"{result.symbol} | score {result.score}",
+        f"why rejected: {_compact_summary(result.rejection_reasons or result.bear_case, 2)}",
+        f"blocked_by: {_compact_summary(result.suppressed_by, 2)}",
     ]
 
 
-def _reason_summary(result: SignalResult) -> str:
-    items = result.reasons[:2] or result.risks[:2]
-    if not items:
-        return "No summary available."
-    return " ; ".join(items)
-
-
-def _system_notes(results: list[SignalResult]) -> list[str]:
+def _system_notes(results: list[SignalResult], portfolio_notes: list[str]) -> list[str]:
     lines: list[str] = []
-    data_warnings = [warning for result in results for warning in result.warnings]
-    validation_warnings = [item for result in results for item in _validation_warnings(result)]
-    heat_warnings = [item for result in results for item in _portfolio_heat_warnings(result)]
+    data_warnings = _unique([warning for result in results for warning in result.warnings])
+    validation_warnings = _unique(
+        [warning for result in results for warning in result.validation_warnings]
+    )
+    heat_warnings = _unique(
+        [warning for result in results for warning in result.portfolio_warnings]
+    )
 
     if data_warnings:
-        lines.extend(["- data warnings:"] + [f"  - {item}" for item in data_warnings[:8]])
+        lines.extend(["- data warnings:"] + [f"  - {item}" for item in data_warnings[:6]])
     if validation_warnings:
-        lines.extend(["- validation warnings:"] + [f"  - {item}" for item in validation_warnings[:8]])
+        lines.extend(["- validation warnings:"] + [f"  - {item}" for item in validation_warnings[:6]])
     if heat_warnings:
-        lines.extend(["- portfolio heat warnings:"] + [f"  - {item}" for item in heat_warnings[:8]])
+        lines.extend(["- portfolio heat warnings:"] + [f"  - {item}" for item in heat_warnings[:6]])
+    if portfolio_notes:
+        lines.extend(["- portfolio notes:"] + [f"  - {item}" for item in _unique(portfolio_notes)[:6]])
     return lines
 
 
-def _filter_by_markers(items: list[str], markers: tuple[str, ...]) -> list[str]:
-    return [item for item in items if _contains_any_marker([item], markers)]
-
-
-def _contains_any_marker(items: list[str], markers: tuple[str, ...]) -> bool:
-    lowered_markers = tuple(marker.lower() for marker in markers)
-    for item in items:
-        text = item.lower()
-        if any(marker in text for marker in lowered_markers):
-            return True
-    return False
-
-
-def _compact_summary(items: list[str], limit: int = 2, exclude: list[str] | None = None) -> str:
-    exclude = exclude or []
-    filtered = [item for item in items if item not in exclude]
+def _compact_summary(items: list[str], limit: int = 2) -> str:
+    filtered = [item for item in items if item]
     if not filtered:
         return "None."
     return " ; ".join(filtered[:limit])
+
+
+def _unique(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        ordered.append(item)
+    return ordered
