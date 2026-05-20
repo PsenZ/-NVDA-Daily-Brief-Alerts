@@ -40,14 +40,19 @@ def compose_daily_report(
     dual_time = format_dual_time(now_dt)
 
     approved = [item for item in results if item.portfolio_decision == "approved"][:3]
+    deferred_ideas = [
+        item
+        for item in results
+        if item.portfolio_decision == "deferred" and item.action not in {"RISK_REDUCE", "REJECT"}
+    ]
     watchlist = [
         item
         for item in results
-        if item.portfolio_decision in {"watchlist", "deferred"} and item.action not in {"RISK_REDUCE", "REJECT"}
+        if item.portfolio_decision == "watchlist" and item.action in {"WATCH", "WAIT"}
     ]
     risk_actions = [item for item in results if item.action == "RISK_REDUCE"]
     rejected = [item for item in results if item.action == "REJECT"]
-    deferred_count = len([item for item in results if item.portfolio_decision == "deferred"])
+    deferred_count = len(deferred_ideas)
 
     lines: list[str] = [
         "VeyraQuant Morning Brief",
@@ -77,9 +82,17 @@ def compose_daily_report(
     for result in approved:
         lines.extend(_top_action_block(result))
 
-    lines.extend(["", "[Watchlist]"])
+    lines.extend(["", "[Deferred Ideas]"])
+    if not deferred_ideas:
+        lines.append("No deferred high-conviction ideas today.")
+    else:
+        lines.append("symbol | rating | score | conviction | why still good | why not today")
+        for result in deferred_ideas:
+            lines.append(_deferred_row(result))
+
+    lines.extend(["", "[Watch / Wait]"])
     if not watchlist:
-        lines.append("No watchlist names today.")
+        lines.append("No watch / wait names today.")
     else:
         lines.append("symbol | rating | score | next condition | why not now")
         for result in watchlist:
@@ -115,12 +128,12 @@ def compose_daily_report(
 def compose_alert_email(result: SignalResult, now_dt: datetime) -> tuple[str, str]:
     dual_time = format_dual_time(now_dt)
     if result.action == "RISK_REDUCE":
-        subject = f"{result.symbol} Risk Alert - {result.rating} - score {result.score}"
+        subject = f"{result.symbol} Risk Alert - {result.rating} - score {_score_label(result)}"
         lines = [
             f"{result.symbol} Risk Alert ({dual_time})",
             "",
             f"rating/action: {result.rating} / {result.action}",
-            f"score: {result.score}",
+            f"score: {_score_label(result)}",
             f"market_regime: {result.market_regime}",
             f"risk reason: {_compact_summary(result.bear_case or result.risks, 2)}",
             f"suggested posture: {result.portfolio_reason or 'Reduce exposure and avoid adding new size.'}",
@@ -130,12 +143,12 @@ def compose_alert_email(result: SignalResult, now_dt: datetime) -> tuple[str, st
         ]
         return subject, "\n".join(lines)
 
-    subject = f"{result.symbol} {result.rating} / {result.action} - score {result.score}"
+    subject = f"{result.symbol} {result.rating} / {result.action} - score {_score_label(result)}"
     lines = [
         f"{result.symbol} Trade Alert ({dual_time})",
         "",
         f"rating/action: {result.rating} / {result.action}",
-        f"score/setup: {result.score} / {result.setup_type}",
+        f"score/setup: {_score_label(result)} / {result.setup_type}",
         f"plan: {result.entry_zone} | stop {result.stop} | targets {result.targets}",
         f"risk budget: position {result.position_pct:.2f}% | max loss {result.max_loss_pct:.2f}%",
         f"why now: {_compact_summary(result.bull_case, 2)}",
@@ -212,7 +225,7 @@ def _top_action_block(result: SignalResult) -> list[str]:
         "",
         f"## {result.symbol}",
         f"rating/action: {result.rating} / {result.action}",
-        f"score/setup: {result.score} / {result.setup_type}",
+        f"score/setup: {_score_label(result)} / {result.setup_type}",
         f"plan: {result.entry_zone} | stop {result.stop} | targets {result.targets}",
         f"risk budget: position {result.position_pct:.2f}% | max loss {result.max_loss_pct:.2f}%",
         f"why now: {_compact_summary(result.bull_case, 2)}",
@@ -225,11 +238,18 @@ def _top_action_block(result: SignalResult) -> list[str]:
     return lines
 
 
+def _deferred_row(result: SignalResult) -> str:
+    return (
+        f"{result.symbol} | {result.rating} | {_score_label(result)} | {result.conviction_level} | "
+        f"{_compact_summary(result.bull_case, 1)} | {result.portfolio_reason}"
+    )
+
+
 def _watchlist_row(result: SignalResult) -> str:
     next_condition = result.trade_plan.trigger or "Wait for better alignment."
     why_not_now = result.portfolio_reason or _compact_summary(result.bear_case or result.risks, 1)
     return (
-        f"{result.symbol} | {result.rating} | {result.score} | "
+        f"{result.symbol} | {result.rating} | {_score_label(result)} | "
         f"{next_condition} | {why_not_now}"
     )
 
@@ -237,7 +257,7 @@ def _watchlist_row(result: SignalResult) -> str:
 def _risk_action_block(result: SignalResult) -> list[str]:
     return [
         "",
-        f"{result.symbol} | {result.rating} | score {result.score}",
+        f"{result.symbol} | {result.rating} | score {_score_label(result)}",
         f"risk reason: {_compact_summary(result.bear_case or result.risks, 2)}",
         f"suggested posture: {result.portfolio_reason or 'Reduce exposure and avoid adding risk.'}",
     ]
@@ -246,7 +266,7 @@ def _risk_action_block(result: SignalResult) -> list[str]:
 def _rejected_block(result: SignalResult) -> list[str]:
     return [
         "",
-        f"{result.symbol} | score {result.score}",
+        f"{result.symbol} | score {_score_label(result)}",
         f"why rejected: {_compact_summary(result.rejection_reasons or result.bear_case, 2)}",
         f"blocked_by: {_compact_summary(result.suppressed_by, 2)}",
     ]
@@ -278,6 +298,12 @@ def _compact_summary(items: list[str], limit: int = 2) -> str:
     if not filtered:
         return "None."
     return " ; ".join(filtered[:limit])
+
+
+def _score_label(result: SignalResult) -> str:
+    if result.score >= 100 and result.raw_score > 100:
+        return "100+"
+    return str(result.score)
 
 
 def _unique(items: list[str]) -> list[str]:

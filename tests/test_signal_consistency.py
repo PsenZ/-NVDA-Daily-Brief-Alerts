@@ -314,6 +314,7 @@ def test_signal_result_new_fields_have_safe_defaults():
     assert result.plan_kind == "wait"
     assert result.rating == "Hold"
     assert result.portfolio_decision == "watchlist"
+    assert result.raw_score == 0.0
 
 
 def test_non_actionable_signal_does_not_consume_portfolio_heat():
@@ -467,7 +468,7 @@ def test_reporting_can_render_non_actionable_signals_without_crashing():
     )
 
     assert subject
-    assert "[Watchlist]" in daily_body
+    assert "[Watch / Wait]" in daily_body
     assert "[Rejected Plans]" in daily_body
     assert "NVDA | Hold | 58" in daily_body
     assert "QQQ | score 72" in daily_body

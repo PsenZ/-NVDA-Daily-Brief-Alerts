@@ -78,6 +78,7 @@ def make_result(
     suppressed_by=None,
     portfolio_decision="watchlist",
     portfolio_reason="Not ready yet.",
+    raw_score=None,
 ):
     trade_plan = TradePlan(
         entry_zone=entry_zone,
@@ -96,6 +97,7 @@ def make_result(
         symbol=symbol,
         signal_type=signal_type,
         score=score,
+        raw_score=float(score if raw_score is None else raw_score),
         market_regime="风险偏好",
         entry_zone=entry_zone,
         stop=stop,
@@ -180,7 +182,7 @@ def test_daily_report_uses_briefing_structure():
         "NVDA",
         "BUY_TRIGGER",
         "突破入场",
-        88,
+        100,
         rating="Buy",
         setup_type="breakout_entry",
         is_actionable=True,
@@ -196,6 +198,7 @@ def test_daily_report_uses_briefing_structure():
         validation_warnings=["entry zone width 4.00% exceeds warning threshold 3.00%"],
         portfolio_decision="approved",
         portfolio_reason="Approved as the best-ranked semiconductor setup on today's board.",
+        raw_score=112.0,
     )
     add_result = make_result(
         "AMD",
@@ -280,7 +283,8 @@ def test_daily_report_uses_briefing_structure():
     assert "[Executive Summary]" in body
     assert "[Market Filter]" in body
     assert "[Top Actions]" in body
-    assert "[Watchlist]" in body
+    assert "[Deferred Ideas]" in body
+    assert "[Watch / Wait]" in body
     assert "[Risk Actions]" in body
     assert "[Rejected Plans]" in body
     assert "Sydney 2026-04-20 07:30 / US Eastern 2026-04-19 17:30" in body
@@ -289,12 +293,18 @@ def test_daily_report_uses_briefing_structure():
     assert "NVDA" in top_actions
     assert "AMD" in top_actions
     assert "rating/action: Buy / BUY_TRIGGER" in top_actions
+    assert "score/setup: 100+ / breakout_entry" in top_actions
     assert "market evidence: QQQ remains above SMA20." in top_actions
     assert "validation warning: entry zone width 4.00% exceeds warning threshold 3.00%" in top_actions
 
-    watchlist = section(body, "Watchlist")
+    deferred = section(body, "Deferred Ideas")
+    assert "AAPL | Hold | 62 | low" in deferred
+    assert "quality trend but crowded sector" in deferred
+    assert "Deferred because the daily approval limit is already full." in deferred
+
+    watchlist = section(body, "Watch / Wait")
     assert "MSFT | Hold | 58" in watchlist
-    assert "AAPL | Hold | 62" in watchlist
+    assert "AAPL" not in watchlist
     assert "entry_zone" not in watchlist
     assert "position_pct" not in watchlist
 
@@ -317,7 +327,7 @@ def test_alert_email_matches_entry_and_risk_styles():
         "NVDA",
         "BUY_TRIGGER",
         "突破入场",
-        88,
+        100,
         rating="Buy",
         setup_type="breakout_entry",
         is_actionable=True,
@@ -333,6 +343,7 @@ def test_alert_email_matches_entry_and_risk_styles():
         validation_warnings=["entry zone width 4.00% exceeds warning threshold 3.00%"],
         portfolio_decision="approved",
         portfolio_reason="Approved as the best-ranked setup.",
+        raw_score=111.0,
     )
     risk = make_result(
         "TSLA",
@@ -355,7 +366,7 @@ def test_alert_email_matches_entry_and_risk_styles():
         risk, datetime(2026, 4, 20, 7, 30, tzinfo=SYDNEY_TZ)
     )
 
-    assert "Buy / BUY_TRIGGER" in entry_subject
+    assert "Buy / BUY_TRIGGER - score 100+" in entry_subject
     assert "plan:" in entry_body
     assert "why now:" in entry_body
     assert "watch risk:" in entry_body
