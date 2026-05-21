@@ -2,9 +2,9 @@
 
 ## Current Version
 
-- Version: `2.6.0`
+- Version: `2.6.1`
 - Date: `2026-05-21`
-- Status: Added position context, decision-review aggregation, strategy parameterization, enhanced portfolio approval metadata, and HTML email output
+- Status: Added private GitHub Actions position-secret support
 
 ## Versioning Rules
 
@@ -13,6 +13,13 @@
 - `PATCH`: bug fix, test improvement, copy update, or operational hardening with no decision-model change.
 
 ## Changelog
+
+### 2.6.1
+
+- Added optional `POSITIONS_JSON` GitHub Secret support in the daily workflow.
+- The workflow now validates private holdings JSON and writes `state/positions.json` only during the run.
+- Kept `state/positions.json` ignored so real holdings are not committed to the repository.
+- Documented the private holdings secret flow in `README.md`.
 
 ### 2.6.0
 

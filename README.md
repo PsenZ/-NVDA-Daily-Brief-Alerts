@@ -214,6 +214,7 @@ Recommended secrets:
 - `SMTP_APP_PASSWORD`
 - `FROM_EMAIL`
 - `TO_EMAIL`
+- `POSITIONS_JSON` optional private positions JSON. If present, the workflow writes it to `state/positions.json` only for that run.
 
 Recommended variables:
 
@@ -226,11 +227,29 @@ Recommended variables:
 
 For a manual test, use the workflow input `force_send=true` and `dry_run=false`.
 
+Private holdings should not be committed. Put the full JSON payload in the repository secret `POSITIONS_JSON` instead:
+
+```json
+{
+  "positions": [
+    {
+      "symbol": "NVDA",
+      "position_pct": 7.5,
+      "cost_basis": 900.25,
+      "opened_at": "2026-04-01",
+      "notes": "Optional private note"
+    }
+  ]
+}
+```
+
+The workflow validates this secret as JSON, writes it locally during the run, and does not commit it back to the repository.
+
 ## Safety Notes
 
 - No broker API.
 - No automatic order placement.
-- No account credentials are saved in the repo.
-- Account size, if used, should be injected through GitHub Secrets.
+- No account credentials or private holdings are saved in the repo.
+- Account size and private positions, if used, should be injected through GitHub Secrets.
 - Every trade plan is decision support only and requires human review.
 

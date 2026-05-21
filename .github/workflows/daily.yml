@@ -38,6 +38,26 @@ jobs:
           pip install -r requirements.txt
           python -m compileall report.py veyraquant
 
+      - name: Create private positions file
+        env:
+          POSITIONS_JSON: ${{ secrets.POSITIONS_JSON }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = os.getenv("POSITIONS_JSON", "").strip()
+          if not payload:
+              print("No POSITIONS_JSON secret configured; running without private position context.")
+              raise SystemExit(0)
+
+          json.loads(payload)
+          Path("state").mkdir(exist_ok=True)
+          Path("state/positions.json").write_text(payload, encoding="utf-8")
+          print("Private positions file created for this workflow run.")
+          PY
+
       - name: Run report
         env:
           SMTP_USER: ${{ secrets.SMTP_USER }}
@@ -59,6 +79,7 @@ jobs:
           PORTFOLIO_HEAT_MAX_PCT: "3"
           ATR_STOP_MULTIPLIER: "2.0"
           MIN_RR: "1.5"
+          POSITIONS_PATH: "state/positions.json"
           SUBJECT_PREFIX: "VeyraQuant 量化简报"
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
           FORCE_DAILY_REPORT: ${{ github.event.inputs.force_send || 'false' }}
