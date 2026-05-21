@@ -1,53 +1,100 @@
 # VeyraQuant
 
-VeyraQuant is a semi-automated swing-trading research assistant for a small US equity watchlist. It creates a daily decision brief and optional intraday alerts, but it does not place orders or connect to a broker.
+## English
 
-The system is designed for 5-20 symbols, free data sources first, and human-confirmed execution. It focuses on clear trade plans, portfolio-level filtering, risk controls, and post-decision review.
+VeyraQuant is a semi-automated swing-trading research assistant for a focused US equity watchlist. It generates daily decision briefs and optional intraday alerts, but it does not place orders, connect to a broker, or store brokerage credentials.
 
-## What It Does
+It is built for 5-20 symbols, free data sources first, and human-confirmed execution. The system emphasizes evidence, risk controls, portfolio approval, position context, and post-decision review.
+
+## 中文
+
+VeyraQuant 是一个面向美股小型股票池的半自动波段交易研究助手。它会生成每日交易决策简报和可选的盘中提醒，但不会自动下单，不连接券商 API，也不会保存券商账户凭证。
+
+系统适合 5-20 个标的，优先使用免费数据源，所有交易计划都需要人工确认。核心重点是：证据、风控、组合审批、持仓上下文和决策复盘。
+
+## What It Does / 系统功能
 
 - Monitors a configurable watchlist, defaulting to `NVDA,TSLA,AAPL,AMD,MU,QQQ,SMH`.
+- 默认监控可配置股票池：`NVDA,TSLA,AAPL,AMD,MU,QQQ,SMH`。
 - Uses market filters from `SPY`, `QQQ`, `SMH`, and `^VIX`.
+- 使用 `SPY`、`QQQ`、`SMH`、`^VIX` 作为大盘、科技、半导体和波动率过滤器。
 - Scores each symbol across trend, momentum, relative strength, volume, volatility/options, sentiment, events, and market regime.
+- 从趋势、动量、相对强弱、成交量、波动率/期权、情绪、事件风险和市场环境多个维度评分。
 - Classifies each result into `BUY_TRIGGER`, `ADD_TRIGGER`, `WATCH`, `WAIT`, `RISK_REDUCE`, or `REJECT`.
+- 将每个标的归类为 `BUY_TRIGGER`、`ADD_TRIGGER`、`WATCH`、`WAIT`、`RISK_REDUCE` 或 `REJECT`。
 - Builds actionable trade plans only for final `BUY_TRIGGER` and `ADD_TRIGGER` signals.
+- 只有最终确认为 `BUY_TRIGGER` 或 `ADD_TRIGGER` 的信号才会生成可执行交易计划。
 - Validates entry zone, stop, targets, RR, position size, and max loss before allowing a buy/add plan into the report.
+- 在交易计划进入日报前，会校验入场区、止损、目标位、盈亏比、仓位比例和最大亏损。
 - Applies portfolio heat controls and a portfolio manager approval layer before presenting top actions.
+- 在展示 Top Actions 前，会经过组合 heat 控制和 Portfolio Manager 审批。
 - Sends a daily morning brief and optional opportunity/risk alerts by email.
+- 通过邮件发送每日晨会简报，也可发送机会提醒和风险提醒。
 - Keeps a decision log and can summarize which setups have recently worked.
+- 保存决策日志，并可复盘哪些 setup 最近表现更好。
 
-## Strategy Logic
+## Strategy Logic / 策略逻辑
 
-VeyraQuant is not a black-box predictor. It is a rules-based decision engine built around structured evidence:
+VeyraQuant is not a black-box predictor. It is a rules-based decision engine built around structured evidence.
 
-- `bull_case`: why the setup could work now.
-- `bear_case`: what can invalidate or weaken the setup.
-- `rating`: `Buy`, `Overweight`, `Hold`, `Underweight`, or `No Trade`.
-- `action`: the execution state, such as `BUY_TRIGGER` or `RISK_REDUCE`.
-- `conviction_level`: high, medium, or low.
-- `decision_balance`: favorable, mixed, fragile, defensive, or blocked.
+VeyraQuant 不是黑箱预测模型，而是基于规则和结构化证据的交易决策引擎。
 
-The current setup families are:
+Key fields:
 
-- `breakout_entry`: trend alignment plus breakout confirmation, volume support, and anti-chase discipline.
-- `pullback_add`: trend intact, controlled pullback, lighter volume, and RSI in a healthy reset zone.
-- `risk_reduce`: low score or overheating/weakening conditions that should reduce risk attention.
+关键字段：
+
+- `bull_case`: why the setup could work now.  
+  多头依据：为什么这个 setup 现在可能有效。
+- `bear_case`: what can invalidate or weaken the setup.  
+  空头/反方依据：什么因素可能使 setup 失效或变弱。
+- `rating`: `Buy`, `Overweight`, `Hold`, `Underweight`, or `No Trade`.  
+  评级：`Buy`、`Overweight`、`Hold`、`Underweight`、`No Trade`。
+- `action`: execution state, such as `BUY_TRIGGER` or `RISK_REDUCE`.  
+  动作：执行状态，例如 `BUY_TRIGGER` 或 `RISK_REDUCE`。
+- `conviction_level`: high, medium, or low.  
+  置信度：high、medium、low。
+- `decision_balance`: favorable, mixed, fragile, defensive, or blocked.  
+  决策平衡：favorable、mixed、fragile、defensive、blocked。
+
+Current setup families:
+
+当前 setup 类型：
+
+- `breakout_entry`: trend alignment, breakout confirmation, volume support, and anti-chase discipline.  
+  突破入场：趋势排列、突破确认、成交量支持和防追高纪律。
+- `pullback_add`: trend intact, controlled pullback, lighter volume, and RSI in a healthy reset zone.  
+  趋势回踩加仓：趋势未破、回踩有序、缩量回撤、RSI 处于健康重置区间。
+- `risk_reduce`: low score or overheating/weakening conditions that should reduce risk attention.  
+  风险降低：低分、过热或趋势变弱时，提示降低风险关注。
 
 Core thresholds are parameterized in `strategies/default.json`, with defaults matching the existing strategy behavior.
 
-## Portfolio Manager
+核心阈值已外置到 `strategies/default.json`，默认参数保持当前策略行为不变。
+
+## Portfolio Manager / 组合审批
 
 After symbols are scored, the portfolio layer decides what is actually worth acting on today.
 
+单标的评分完成后，组合层会判断今天哪些机会真正值得执行。
+
 It keeps:
 
-- `approved`: best actionable ideas for today.
-- `deferred`: good candidates delayed by capacity, sector concentration, or quality.
-- `watchlist`: names that need better confirmation.
-- `risk_action`: risk-reduction signals.
-- `rejected`: invalid or vetoed plans.
+系统会维护：
+
+- `approved`: best actionable ideas for today.  
+  今日批准执行的最佳机会。
+- `deferred`: good candidates delayed by capacity, sector concentration, or quality.  
+  因容量、行业集中度或质量问题被延后的候选机会。
+- `watchlist`: names that need better confirmation.  
+  需要继续观察、等待更好确认的标的。
+- `risk_action`: risk-reduction signals.  
+  风险控制信号。
+- `rejected`: invalid or vetoed plans.  
+  无效或被否决的计划。
 
 It also records:
+
+同时记录：
 
 - `approval_rank_score`
 - `sector_bucket`
@@ -55,9 +102,13 @@ It also records:
 - `defer_reason_code`
 - `portfolio_notes`
 
-The portfolio layer now guards both sector risk and sector position exposure. If a new approved idea would push a sector beyond its configured risk or position budget, the lower-ranked candidate is deferred rather than presented as a fresh top action.
+The Portfolio Risk Guard controls both sector risk and sector position exposure. If approving a new idea would push a sector beyond its configured risk or position budget, the lower-ranked candidate is deferred instead of being shown as a fresh top action.
+
+Portfolio Risk Guard 会同时控制行业风险预算和行业仓位暴露。如果批准一个新机会会导致某个行业超过风险预算或仓位预算，排名较低的候选会进入 deferred，而不是被当成新的 Top Action 展示。
 
 Default sector controls:
+
+默认行业控制参数：
 
 ```text
 SECTOR_RISK_LIMITS_JSON={"semiconductor":1.2,"mega_growth":1.5,"auto_growth":0.8,"general":1.0}
@@ -67,19 +118,27 @@ MAX_APPROVED_ACTIONS_NEUTRAL=2
 MAX_APPROVED_ACTIONS_RISK_OFF=0
 ```
 
-This keeps the daily report from becoming a pile of good-looking but correlated signals.
+This prevents the daily brief from presenting several correlated trades as if they were independent opportunities.
 
-## Position Context
+这可以避免日报把多个高度相关的交易机会误展示成彼此独立的机会。
 
-Risk signals can now be evaluated against a local position file.
+## Position Context / 持仓上下文
+
+Risk signals can be evaluated against a local private position file.
+
+风险信号可以结合本地私密持仓文件进行判断。
 
 Default path:
+
+默认路径：
 
 ```text
 state/positions.json
 ```
 
 Example:
+
+示例：
 
 ```json
 {
@@ -97,15 +156,21 @@ Example:
 
 If a `RISK_REDUCE` signal matches an open position, the report marks it as an open-position risk action and suggests `trim` or `de-risk`. If no position is recorded, it becomes `monitor-only` instead of implying an immediate sell.
 
-## Decision Review
+如果 `RISK_REDUCE` 命中真实持仓，日报会标记为针对已有持仓的风险动作，并建议 `trim` 或 `de-risk`。如果没有记录持仓，则显示为 `monitor-only`，不会误导成“立即减仓”。
+
+## Decision Review / 决策复盘
 
 The decision log is stored at:
+
+决策日志保存位置：
 
 ```text
 memory/decision_log.jsonl
 ```
 
 VeyraQuant can aggregate historical outcomes by:
+
+VeyraQuant 可以按以下维度聚合历史结果：
 
 - `setup_type`
 - `action`
@@ -115,7 +180,11 @@ VeyraQuant can aggregate historical outcomes by:
 
 Metrics include count, resolved/unresolved count, average 5-day return, average alpha versus SPY, and win rate.
 
+指标包括样本数、已解析/未解析数量、平均 5 日收益、相对 SPY 的平均 alpha 和胜率。
+
 Run locally:
+
+本地运行：
 
 ```powershell
 python -m veyraquant.memory_review
@@ -123,29 +192,41 @@ python -m veyraquant.memory_review
 
 The daily report includes only a short review note, not a full table.
 
-## Email Output
+日报只展示简短复盘摘要，不会塞入完整统计表。
+
+## Email Output / 邮件输出
 
 Emails are sent as `multipart/alternative`:
 
-- `text/plain` remains the official fallback.
-- `text/html` adds a more readable morning-brief layout.
+邮件使用 `multipart/alternative` 格式发送：
+
+- `text/plain` remains the official fallback.  
+  `text/plain` 保留为正式 fallback。
+- `text/html` adds a more readable morning-brief layout.  
+  `text/html` 提供更易读的晨会简报排版。
 
 Daily brief sections:
 
-- Executive Summary
-- Market Filter
-- Top Actions
-- Deferred Ideas
-- Watch / Wait
-- Risk Actions
-- Rejected Plans
-- System Notes
+日报结构：
+
+- Executive Summary / 执行摘要
+- Market Filter / 市场过滤器
+- Top Actions / 今日重点行动
+- Deferred Ideas / 延后机会
+- Watch / Wait / 观察与等待
+- Risk Actions / 风险动作
+- Rejected Plans / 被拒绝计划
+- System Notes / 系统备注
 
 Opportunity alerts and risk alerts use the same action-plus-reason language as the daily brief.
 
-## Configuration
+机会提醒和风险提醒使用与日报一致的“行动 + 理由”语言。
+
+## Configuration / 配置
 
 Required email secrets:
+
+必需邮件 Secrets：
 
 ```text
 SMTP_USER
@@ -155,6 +236,8 @@ TO_EMAIL
 ```
 
 Core runtime settings:
+
+核心运行配置：
 
 ```text
 SYMBOLS=NVDA,TSLA,AAPL,AMD,MU,QQQ,SMH
@@ -173,6 +256,8 @@ FORCE_DAILY_REPORT=false
 ```
 
 Risk settings:
+
+风控配置：
 
 ```text
 ACCOUNT_EQUITY=
@@ -193,6 +278,8 @@ MAX_APPROVED_ACTIONS_RISK_OFF=0
 
 Context and memory:
 
+上下文与复盘：
+
 ```text
 POSITIONS_PATH=state/positions.json
 STRATEGY_CONFIG_PATH=strategies/default.json
@@ -200,9 +287,11 @@ MEMORY_LOG_PATH=memory/decision_log.jsonl
 DECISION_MEMORY_HOLDING_DAYS=5
 ```
 
-## Run Locally
+## Run Locally / 本地运行
 
 Install dependencies:
+
+安装依赖：
 
 ```powershell
 python -m pip install -r requirements.txt
@@ -210,12 +299,16 @@ python -m pip install -r requirements.txt
 
 Dry run:
 
+本地 dry run：
+
 ```powershell
 $env:DRY_RUN="true"
 python report.py
 ```
 
 Run tests:
+
+运行测试：
 
 ```powershell
 python -m compileall report.py veyraquant tests
@@ -226,15 +319,22 @@ pytest
 
 The workflow can run automatically on schedule or manually through `workflow_dispatch`.
 
+GitHub Actions 可以定时自动运行，也可以通过 `workflow_dispatch` 手动运行。
+
 Recommended secrets:
+
+推荐配置的 Secrets：
 
 - `SMTP_USER`
 - `SMTP_APP_PASSWORD`
 - `FROM_EMAIL`
 - `TO_EMAIL`
-- `POSITIONS_JSON` optional private positions JSON. If present, the workflow writes it to `state/positions.json` only for that run.
+- `POSITIONS_JSON`: optional private positions JSON. If present, the workflow writes it to `state/positions.json` only for that run.  
+  可选私密持仓 JSON。如果配置了它，workflow 只会在当次运行中临时写入 `state/positions.json`。
 
 Recommended variables:
+
+推荐配置的变量：
 
 - `SYMBOLS`
 - `ENABLE_ENTRY_ALERTS`
@@ -243,9 +343,22 @@ Recommended variables:
 - `SEND_MINUTE`
 - `SEND_WINDOW_MINUTES`
 
-For a manual test, use the workflow input `force_send=true` and `dry_run=false`.
+For a manual test, use:
 
-Private holdings should not be committed. Put the full JSON payload in the repository secret `POSITIONS_JSON` instead:
+手动测试建议：
+
+```text
+force_send=true
+dry_run=false
+```
+
+Private holdings should not be committed. Put the full JSON payload in the repository secret `POSITIONS_JSON` instead.
+
+私密持仓不要提交到仓库。请把完整 JSON 放进 GitHub repository secret：`POSITIONS_JSON`。
+
+Example:
+
+示例：
 
 ```json
 {
@@ -263,11 +376,24 @@ Private holdings should not be committed. Put the full JSON payload in the repos
 
 The workflow validates this secret as JSON, writes it locally during the run, and does not commit it back to the repository.
 
-## Safety Notes
+workflow 会校验这个 Secret 是否为合法 JSON，在运行时临时写入本地文件，并且不会把它提交回仓库。
 
-- No broker API.
-- No automatic order placement.
-- No account credentials or private holdings are saved in the repo.
-- Account size and private positions, if used, should be injected through GitHub Secrets.
-- Every trade plan is decision support only and requires human review.
+## Safety Notes / 安全说明
+
+- No broker API.  
+  不接券商 API。
+- No automatic order placement.  
+  不自动下单。
+- No account credentials or private holdings are saved in the repo.  
+  仓库不保存账户凭证或真实私密持仓。
+- Account size and private positions, if used, should be injected through GitHub Secrets.  
+  账户规模和私密持仓如需使用，应通过 GitHub Secrets 注入。
+- Every trade plan is decision support only and requires human review.  
+  所有交易计划仅供辅助决策，最终执行必须由人工确认。
+
+## Important Disclaimer / 重要免责声明
+
+This is a rules-based research assistant, not a statistically validated alpha model. Reports, alerts, backtests, and decision-review outputs are diagnostic tools and should not be treated as proof of future performance.
+
+本项目是规则型研究助手，不是经过统计验证的 alpha 模型。日报、提醒、回测和决策复盘都属于诊断工具，不应被视为未来收益的证明。
 
