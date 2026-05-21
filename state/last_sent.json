@@ -4,16 +4,16 @@
       "breakout_entry": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$293.28 - $294.90",
-          "max_loss_pct": 0.44,
+          "entry_zone": "$302.27 - $303.69",
+          "max_loss_pct": 0.38,
           "position_pct": 10.0,
-          "stop": "$281.13",
-          "targets": "$313.53 / $326.49"
+          "stop": "$291.61",
+          "targets": "$320.03 / $331.40"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-05-12T01:46:19.283578+10:00",
-        "signal_hash": "4e982e28e2d7"
+        "sent_at": "2026-05-21T23:52:08.697147+10:00",
+        "signal_hash": "6be786cf5e78"
       },
       "pullback_add": {
         "channel": "entry",
@@ -64,16 +64,16 @@
       "breakout_entry": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$697.84 - $706.81",
+          "entry_zone": "$750.66 - $762.65",
           "max_loss_pct": 0.5,
-          "position_pct": 4.9,
-          "stop": "$630.59",
-          "targets": "$809.92 / $881.65"
+          "position_pct": 3.94,
+          "stop": "$660.75",
+          "targets": "$900.52 / $996.42"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-05-08T23:43:44.929805+10:00",
-        "signal_hash": "8917b3ad5b37"
+        "sent_at": "2026-05-21T23:52:08.697147+10:00",
+        "signal_hash": "627ae0bed86b"
       }
     },
     "NVDA": {
@@ -142,16 +142,16 @@
       "breakout_entry": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$420.69 - $424.77",
+          "entry_zone": "$419.03 - $423.11",
           "max_loss_pct": 0.5,
-          "position_pct": 6.47,
-          "stop": "$390.08",
-          "targets": "$471.70 / $504.35"
+          "position_pct": 6.45,
+          "stop": "$388.42",
+          "targets": "$470.04 / $502.69"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-05-21T23:46:56.294314+10:00",
-        "signal_hash": "4eb505f28633"
+        "sent_at": "2026-05-21T23:52:08.697147+10:00",
+        "signal_hash": "73140c300933"
       },
       "pullback_add": {
         "channel": "entry",
