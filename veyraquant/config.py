@@ -1,7 +1,31 @@
 ﻿import os
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
+
+
+DEFAULT_SECTOR_MAP = {
+    "NVDA": "semiconductor",
+    "AMD": "semiconductor",
+    "MU": "semiconductor",
+    "SMH": "semiconductor",
+    "QQQ": "mega_growth",
+    "AAPL": "mega_growth",
+    "MSFT": "mega_growth",
+    "TSLA": "auto_growth",
+}
+DEFAULT_SECTOR_RISK_LIMITS = {
+    "semiconductor": 1.2,
+    "mega_growth": 1.5,
+    "auto_growth": 0.8,
+    "general": 1.0,
+}
+DEFAULT_SECTOR_POSITION_LIMITS = {
+    "semiconductor": 20.0,
+    "mega_growth": 25.0,
+    "auto_growth": 10.0,
+    "general": 10.0,
+}
 
 
 def _bool_env(name: str, default: bool) -> bool:
@@ -23,6 +47,44 @@ def _int_env(name: str, default: int) -> int:
     if value is None or value.strip() == "":
         return default
     return int(value)
+
+
+def _json_dict_env(name: str, default: dict) -> dict:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return dict(default)
+    try:
+        payload = json.loads(value)
+    except Exception:
+        return dict(default)
+    if not isinstance(payload, dict):
+        return dict(default)
+    return payload
+
+
+def _str_dict_env(name: str, default: dict[str, str]) -> dict[str, str]:
+    payload = _json_dict_env(name, default)
+    normalized: dict[str, str] = {}
+    for key, value in payload.items():
+        symbol = str(key).strip().upper()
+        sector = str(value).strip()
+        if symbol and sector:
+            normalized[symbol] = sector
+    return normalized or dict(default)
+
+
+def _float_dict_env(name: str, default: dict[str, float]) -> dict[str, float]:
+    payload = _json_dict_env(name, default)
+    normalized: dict[str, float] = {}
+    for key, value in payload.items():
+        sector = str(key).strip()
+        try:
+            limit = float(value)
+        except Exception:
+            continue
+        if sector and limit >= 0:
+            normalized[sector] = limit
+    return normalized or dict(default)
 
 
 def _symbols_from_env() -> list[str]:
@@ -111,6 +173,16 @@ class AppConfig:
     positions_path: str = os.path.join("state", "positions.json")
     strategy_config_path: str = os.path.join("strategies", "default.json")
     strategy: StrategyConfig = StrategyConfig()
+    sector_map: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_SECTOR_MAP))
+    sector_risk_limits: dict[str, float] = field(
+        default_factory=lambda: dict(DEFAULT_SECTOR_RISK_LIMITS)
+    )
+    sector_position_limits: dict[str, float] = field(
+        default_factory=lambda: dict(DEFAULT_SECTOR_POSITION_LIMITS)
+    )
+    max_approved_actions_risk_on: int = 3
+    max_approved_actions_neutral: int = 2
+    max_approved_actions_risk_off: int = 0
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -170,4 +242,14 @@ class AppConfig:
             positions_path=os.getenv("POSITIONS_PATH", os.path.join("state", "positions.json")),
             strategy_config_path=strategy_config_path,
             strategy=_load_strategy_config(strategy_config_path),
+            sector_map=_str_dict_env("SECTOR_MAP_JSON", DEFAULT_SECTOR_MAP),
+            sector_risk_limits=_float_dict_env(
+                "SECTOR_RISK_LIMITS_JSON", DEFAULT_SECTOR_RISK_LIMITS
+            ),
+            sector_position_limits=_float_dict_env(
+                "SECTOR_POSITION_LIMITS_JSON", DEFAULT_SECTOR_POSITION_LIMITS
+            ),
+            max_approved_actions_risk_on=_int_env("MAX_APPROVED_ACTIONS_RISK_ON", 3),
+            max_approved_actions_neutral=_int_env("MAX_APPROVED_ACTIONS_NEUTRAL", 2),
+            max_approved_actions_risk_off=_int_env("MAX_APPROVED_ACTIONS_RISK_OFF", 0),
         )

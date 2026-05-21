@@ -55,7 +55,19 @@ It also records:
 - `defer_reason_code`
 - `portfolio_notes`
 
-This keeps the daily report from becoming a pile of good-looking but competing signals.
+The portfolio layer now guards both sector risk and sector position exposure. If a new approved idea would push a sector beyond its configured risk or position budget, the lower-ranked candidate is deferred rather than presented as a fresh top action.
+
+Default sector controls:
+
+```text
+SECTOR_RISK_LIMITS_JSON={"semiconductor":1.2,"mega_growth":1.5,"auto_growth":0.8,"general":1.0}
+SECTOR_POSITION_LIMITS_JSON={"semiconductor":20,"mega_growth":25,"auto_growth":10,"general":10}
+MAX_APPROVED_ACTIONS_RISK_ON=3
+MAX_APPROVED_ACTIONS_NEUTRAL=2
+MAX_APPROVED_ACTIONS_RISK_OFF=0
+```
+
+This keeps the daily report from becoming a pile of good-looking but correlated signals.
 
 ## Position Context
 
@@ -171,6 +183,12 @@ ATR_STOP_MULTIPLIER=2.0
 MIN_RR=1.5
 MAX_ENTRY_ZONE_WIDTH_WARN_PCT=3.0
 MAX_ENTRY_ZONE_WIDTH_REJECT_PCT=6.0
+SECTOR_MAP_JSON={"NVDA":"semiconductor","AMD":"semiconductor","MU":"semiconductor","SMH":"semiconductor","QQQ":"mega_growth","AAPL":"mega_growth","MSFT":"mega_growth","TSLA":"auto_growth"}
+SECTOR_RISK_LIMITS_JSON={"semiconductor":1.2,"mega_growth":1.5,"auto_growth":0.8,"general":1.0}
+SECTOR_POSITION_LIMITS_JSON={"semiconductor":20,"mega_growth":25,"auto_growth":10,"general":10}
+MAX_APPROVED_ACTIONS_RISK_ON=3
+MAX_APPROVED_ACTIONS_NEUTRAL=2
+MAX_APPROVED_ACTIONS_RISK_OFF=0
 ```
 
 Context and memory:

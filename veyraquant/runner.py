@@ -94,7 +94,7 @@ def build_results(symbol_data_items: list[SymbolData], market, config: AppConfig
     ]
     ranked = assign_ranks(results)
     heat_adjusted = enforce_portfolio_heat(ranked, config.portfolio_heat_max_pct)
-    reviewed, portfolio_notes = apply_portfolio_manager(heat_adjusted, market)
+    reviewed, portfolio_notes = apply_portfolio_manager(heat_adjusted, market, config)
     return apply_position_context(reviewed, positions or {}), portfolio_notes
 
 

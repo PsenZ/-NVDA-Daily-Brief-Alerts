@@ -32,3 +32,13 @@ def portfolio_heat_cap(position_pct: float, max_loss_pct: float, heat_left_pct: 
         return round(position_pct, 2), round(max_loss_pct, 2)
     ratio = heat_left_pct / max_loss_pct
     return round(position_pct * ratio, 2), round(heat_left_pct, 2)
+
+
+def budget_exceeded(current_pct: float, addition_pct: float, limit_pct: float | None) -> bool:
+    if limit_pct is None or limit_pct <= 0:
+        return False
+    return current_pct + addition_pct > limit_pct + 1e-9
+
+
+def budget_after(current_pct: float, addition_pct: float) -> float:
+    return round(current_pct + addition_pct, 4)

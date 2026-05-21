@@ -1,36 +1,37 @@
 from collections import defaultdict
+from typing import Any
 
+from .config import DEFAULT_SECTOR_MAP, DEFAULT_SECTOR_POSITION_LIMITS, DEFAULT_SECTOR_RISK_LIMITS
 from .models import MarketContext, SignalResult
+from .risk import budget_after, budget_exceeded
 
 
 ACTIONABLE_ACTIONS = {"BUY_TRIGGER", "ADD_TRIGGER"}
-SECTOR_MAP = {
-    "NVDA": "semiconductor",
-    "AMD": "semiconductor",
-    "MU": "semiconductor",
-    "SMH": "semiconductor",
-    "QQQ": "mega_growth",
-    "AAPL": "mega_growth",
-    "MSFT": "mega_growth",
-    "TSLA": "auto_growth",
-}
 CONVICTION_WEIGHT = {"high": 3, "medium": 2, "low": 1}
 
 
 def apply_portfolio_manager(
-    results: list[SignalResult], market: MarketContext
+    results: list[SignalResult], market: MarketContext, config: Any | None = None
 ) -> tuple[list[SignalResult], list[str]]:
     notes: list[str] = []
-    approved_limit = _approved_limit(market.label)
-    sector_limit = 2 if market.label == "风险偏好" else 1
-    sector_counts: dict[str, int] = defaultdict(int)
+    sector_map = _config_dict(config, "sector_map", DEFAULT_SECTOR_MAP)
+    sector_risk_limits = _config_dict(config, "sector_risk_limits", DEFAULT_SECTOR_RISK_LIMITS)
+    sector_position_limits = _config_dict(
+        config, "sector_position_limits", DEFAULT_SECTOR_POSITION_LIMITS
+    )
+    market_bucket = _market_bucket(market)
+    approved_limit = _approved_limit(config, market_bucket)
+    sector_risk_used: dict[str, float] = defaultdict(float)
+    sector_position_used: dict[str, float] = defaultdict(float)
     approved_count = 0
 
     for result in results:
-        result.sector_bucket = _sector_for_symbol(result.symbol)
+        result.sector_bucket = _sector_for_symbol(result.symbol, sector_map)
         result.approval_rank_score = _candidate_rank_score(result)
         result.approval_reason_code = ""
         result.defer_reason_code = ""
+        result.sector_risk_after = 0.0
+        result.sector_position_after = 0.0
         if result.action in ACTIONABLE_ACTIONS and result.is_actionable:
             result.portfolio_decision = "candidate"
             result.portfolio_reason = "Pending portfolio review."
@@ -50,49 +51,82 @@ def apply_portfolio_manager(
     for result in ordered:
         sector = result.sector_bucket
         if approved_count >= approved_limit:
-            result.portfolio_decision = "deferred"
-            result.defer_reason_code = "capacity_deferred"
-            result.portfolio_reason = "Deferred because the daily approval limit is already full."
-            notes.append(
-                f"{result.symbol} deferred after reaching the daily approval limit ({approved_limit})."
+            _defer(
+                result,
+                "capacity_deferred",
+                "Deferred because the daily approval limit is already full.",
+                notes,
+                f"{result.symbol} deferred after reaching the daily approval limit ({approved_limit}).",
             )
             continue
-        if sector_counts[sector] >= sector_limit:
-            result.portfolio_decision = "deferred"
-            result.defer_reason_code = "sector_concentration_deferred"
-            result.portfolio_reason = (
-                f"Deferred to avoid concentration in the {sector.replace('_', ' ')} bucket."
+
+        next_sector_risk = budget_after(sector_risk_used[sector], result.max_loss_pct)
+        sector_risk_limit = _limit_for_sector(sector, sector_risk_limits)
+        if budget_exceeded(sector_risk_used[sector], result.max_loss_pct, sector_risk_limit):
+            _defer(
+                result,
+                "sector_risk_limit_exceeded",
+                (
+                    f"Deferred because {sector.replace('_', ' ')} risk would reach "
+                    f"{next_sector_risk:.2f}% versus the {sector_risk_limit:.2f}% limit."
+                ),
+                notes,
+                (
+                    f"{result.symbol} deferred: {sector.replace('_', ' ')} risk budget "
+                    f"{next_sector_risk:.2f}% exceeds {sector_risk_limit:.2f}%."
+                ),
             )
-            notes.append(
-                f"{result.symbol} deferred due to {sector.replace('_', ' ')} concentration."
+            result.sector_risk_after = next_sector_risk
+            result.sector_position_after = budget_after(
+                sector_position_used[sector], result.position_pct
             )
+            continue
+
+        next_sector_position = budget_after(sector_position_used[sector], result.position_pct)
+        sector_position_limit = _limit_for_sector(sector, sector_position_limits)
+        if budget_exceeded(
+            sector_position_used[sector], result.position_pct, sector_position_limit
+        ):
+            _defer(
+                result,
+                "sector_position_limit_exceeded",
+                (
+                    f"Deferred because {sector.replace('_', ' ')} position exposure would reach "
+                    f"{next_sector_position:.2f}% versus the {sector_position_limit:.2f}% limit."
+                ),
+                notes,
+                (
+                    f"{result.symbol} deferred: {sector.replace('_', ' ')} position exposure "
+                    f"{next_sector_position:.2f}% exceeds {sector_position_limit:.2f}%."
+                ),
+            )
+            result.sector_risk_after = next_sector_risk
+            result.sector_position_after = next_sector_position
             continue
 
         result.portfolio_decision = "approved"
-        result.approval_reason_code = "approved_clean" if not result.validation_warnings else "approved_with_validation_warning"
+        result.approval_reason_code = (
+            "approved_clean" if not result.validation_warnings else "approved_with_validation_warning"
+        )
+        result.sector_risk_after = next_sector_risk
+        result.sector_position_after = next_sector_position
         result.portfolio_reason = _approval_reason(result, sector)
+        sector_risk_used[sector] = next_sector_risk
+        sector_position_used[sector] = next_sector_position
         approved_count += 1
-        sector_counts[sector] += 1
 
-    if market.label == "风险规避":
-        notes.append("Risk-off market regime caps approved trades to one.")
-    elif market.label != "风险偏好":
-        notes.append("Neutral market regime keeps approvals selective.")
+    if market_bucket == "risk_off":
+        notes.append(f"Risk-off market regime caps approved trades to {approved_limit}.")
+    elif market_bucket == "neutral":
+        notes.append(f"Neutral market regime caps approved trades to {approved_limit}.")
     if not candidates:
         notes.append("No actionable candidate reached portfolio review.")
     return results, _dedupe_preserve_order(notes)
 
 
-def _candidate_priority(result: SignalResult) -> tuple[int, int, int, int]:
-    validation_penalty = 0 if not result.validation_warnings else -1
-    clean_heat = 0 if not result.portfolio_warnings else -1
+def _candidate_priority(result: SignalResult) -> tuple[float, int]:
     rank_bonus = max(0, 100 - result.rank)
-    return (
-        CONVICTION_WEIGHT.get(result.conviction_level, 1),
-        validation_penalty,
-        clean_heat,
-        int(_candidate_rank_score(result)) + rank_bonus,
-    )
+    return (_candidate_rank_score(result), rank_bonus)
 
 
 def _candidate_rank_score(result: SignalResult) -> float:
@@ -108,16 +142,35 @@ def _candidate_rank_score(result: SignalResult) -> float:
     )
 
 
-def _approved_limit(market_label: str) -> int:
-    if market_label == "风险规避":
-        return 1
-    if market_label == "风险偏好":
-        return 3
-    return 2
+def _approved_limit(config: Any | None, market_bucket: str) -> int:
+    defaults = {"risk_on": 3, "neutral": 2, "risk_off": 0}
+    attr = {
+        "risk_on": "max_approved_actions_risk_on",
+        "neutral": "max_approved_actions_neutral",
+        "risk_off": "max_approved_actions_risk_off",
+    }[market_bucket]
+    try:
+        return max(0, int(getattr(config, attr)))
+    except Exception:
+        return defaults[market_bucket]
 
 
-def _sector_for_symbol(symbol: str) -> str:
-    return SECTOR_MAP.get(symbol.upper(), "general")
+def _market_bucket(market: MarketContext) -> str:
+    if market.score < 0:
+        return "risk_off"
+    if market.score >= 10:
+        return "risk_on"
+    return "neutral"
+
+
+def _sector_for_symbol(symbol: str, sector_map: dict[str, str]) -> str:
+    return sector_map.get(symbol.upper(), "general")
+
+
+def _limit_for_sector(sector: str, limits: dict[str, float]) -> float | None:
+    if sector in limits:
+        return limits[sector]
+    return limits.get("general")
 
 
 def _approval_reason(result: SignalResult, sector: str) -> str:
@@ -126,7 +179,28 @@ def _approval_reason(result: SignalResult, sector: str) -> str:
             f"Approved as a higher-conviction {sector.replace('_', ' ')} idea, "
             "but keep sizing disciplined because validation warnings remain."
         )
-    return f"Approved as the best-ranked {sector.replace('_', ' ')} setup on today's board."
+    return f"Approved as the best-ranked {sector.replace('_', ' ')} setup within risk budget."
+
+
+def _defer(
+    result: SignalResult,
+    reason_code: str,
+    reason: str,
+    notes: list[str],
+    note: str,
+) -> None:
+    result.portfolio_decision = "deferred"
+    result.defer_reason_code = reason_code
+    result.portfolio_reason = reason
+    result.portfolio_warnings.append(reason)
+    notes.append(note)
+
+
+def _config_dict(config: Any | None, attr: str, default: dict) -> dict:
+    value = getattr(config, attr, None)
+    if isinstance(value, dict) and value:
+        return dict(value)
+    return dict(default)
 
 
 def _dedupe_preserve_order(items: list[str]) -> list[str]:

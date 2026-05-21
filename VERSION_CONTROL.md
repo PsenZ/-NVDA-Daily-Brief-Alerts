@@ -2,9 +2,9 @@
 
 ## Current Version
 
-- Version: `2.6.1`
+- Version: `2.7.0`
 - Date: `2026-05-21`
-- Status: Added private GitHub Actions position-secret support
+- Status: Added Portfolio Risk Guard with sector risk and position budgets
 
 ## Versioning Rules
 
@@ -13,6 +13,16 @@
 - `PATCH`: bug fix, test improvement, copy update, or operational hardening with no decision-model change.
 
 ## Changelog
+
+### 2.7.0
+
+- Added configurable sector risk budgets with `SECTOR_RISK_LIMITS_JSON`.
+- Added configurable sector position exposure budgets with `SECTOR_POSITION_LIMITS_JSON`.
+- Added configurable approval caps for risk-on, neutral, and risk-off regimes.
+- Replaced count-only sector approval with budget-aware portfolio approval.
+- Added structured deferred reason codes: `sector_risk_limit_exceeded`, `sector_position_limit_exceeded`, and `capacity_deferred`.
+- Added sector budget usage fields to `SignalResult`.
+- Added tests for sector risk limits, sector position limits, rank-priority approval, risk-off approval caps, and default fallback behavior.
 
 ### 2.6.1
 

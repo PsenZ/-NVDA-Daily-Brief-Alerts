@@ -119,3 +119,5 @@ class SignalResult:
     sector_bucket: str = ""
     defer_reason_code: str = ""
     approval_reason_code: str = ""
+    sector_risk_after: float = 0.0
+    sector_position_after: float = 0.0
