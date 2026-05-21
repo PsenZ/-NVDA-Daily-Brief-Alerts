@@ -1,4 +1,5 @@
 from datetime import datetime
+from html import escape
 
 from .config import AppConfig
 from .models import MarketContext, SignalResult
@@ -35,6 +36,7 @@ def compose_daily_report(
     config: AppConfig,
     now_dt: datetime,
     portfolio_notes: list[str] | None = None,
+    review_notes: list[str] | None = None,
 ) -> tuple[str, str]:
     subject = f"{config.subject_prefix} - {now_dt.strftime('%Y-%m-%d')}"
     dual_time = format_dual_time(now_dt)
@@ -111,7 +113,7 @@ def compose_daily_report(
         lines.extend(_rejected_block(result))
 
     lines.extend(["", "[System Notes]"])
-    notes = _system_notes(results, portfolio_notes or [])
+    notes = _system_notes(results, portfolio_notes or [], review_notes or [])
     if notes:
         lines.extend(notes)
     else:
@@ -128,6 +130,8 @@ def compose_daily_report(
 def compose_alert_email(result: SignalResult, now_dt: datetime) -> tuple[str, str]:
     dual_time = format_dual_time(now_dt)
     if result.action == "RISK_REDUCE":
+        position_context = getattr(result, "position_context", "No open position.")
+        suggested_posture = getattr(result, "suggested_posture", "monitor-only")
         subject = f"{result.symbol} Risk Alert - {result.rating} - score {_score_label(result)}"
         lines = [
             f"{result.symbol} Risk Alert ({dual_time})",
@@ -136,7 +140,9 @@ def compose_alert_email(result: SignalResult, now_dt: datetime) -> tuple[str, st
             f"score: {_score_label(result)}",
             f"market_regime: {result.market_regime}",
             f"risk reason: {_compact_summary(result.bear_case or result.risks, 2)}",
-            f"suggested posture: {result.portfolio_reason or 'Reduce exposure and avoid adding new size.'}",
+            f"position_context: {position_context}",
+            f"suggested posture: {suggested_posture}",
+            f"risk note: {result.portfolio_reason or 'Monitor the risk condition.'}",
             f"market evidence: {_compact_summary(result.market_evidence, 1)}",
             "",
             "No buy/add trade plan is attached to this risk alert.",
@@ -159,6 +165,43 @@ def compose_alert_email(result: SignalResult, now_dt: datetime) -> tuple[str, st
     if result.validation_warnings:
         lines.append(f"validation warning: {_compact_summary(result.validation_warnings, 1)}")
     return subject, "\n".join(lines)
+
+
+def compose_daily_report_html(
+    results: list[SignalResult],
+    market: MarketContext,
+    config: AppConfig,
+    now_dt: datetime,
+    portfolio_notes: list[str] | None = None,
+    review_notes: list[str] | None = None,
+) -> str:
+    _subject, plain = compose_daily_report(results, market, config, now_dt, portfolio_notes, review_notes)
+    sections = _plain_sections(plain)
+    blocks = [
+        "<!doctype html><html><body style=\"margin:0;background:#0f172a;color:#e5e7eb;font-family:Arial,sans-serif;\">",
+        "<div style=\"max-width:860px;margin:0 auto;padding:24px;\">",
+        "<h1 style=\"margin:0 0 8px;font-size:24px;\">VeyraQuant Morning Brief</h1>",
+        f"<p style=\"margin:0 0 20px;color:#93c5fd;\">{escape(format_dual_time(now_dt))}</p>",
+    ]
+    for title, content in sections:
+        blocks.append(_html_section(title, content))
+    blocks.append("</div></body></html>")
+    return "\n".join(blocks)
+
+
+def compose_alert_email_html(result: SignalResult, now_dt: datetime) -> str:
+    _subject, plain = compose_alert_email(result, now_dt)
+    lines = [line for line in plain.splitlines() if line.strip()]
+    title = escape(lines[0]) if lines else escape(result.symbol)
+    rows = "".join(f"<p style=\"margin:6px 0;\">{escape(line)}</p>" for line in lines[1:])
+    border = "#f97316" if result.action == "RISK_REDUCE" else "#22c55e"
+    return (
+        "<!doctype html><html><body style=\"margin:0;background:#111827;color:#e5e7eb;font-family:Arial,sans-serif;\">"
+        "<div style=\"max-width:720px;margin:0 auto;padding:24px;\">"
+        f"<div style=\"border-left:4px solid {border};padding:16px;background:#1f2937;\">"
+        f"<h1 style=\"margin:0 0 12px;font-size:22px;\">{title}</h1>{rows}"
+        "</div></div></body></html>"
+    )
 
 
 def _trading_posture(market: MarketContext, approved_count: int) -> str:
@@ -255,11 +298,15 @@ def _watchlist_row(result: SignalResult) -> str:
 
 
 def _risk_action_block(result: SignalResult) -> list[str]:
+    position_context = getattr(result, "position_context", "No open position.")
+    suggested_posture = getattr(result, "suggested_posture", "monitor-only")
     return [
         "",
         f"{result.symbol} | {result.rating} | score {_score_label(result)}",
         f"risk reason: {_compact_summary(result.bear_case or result.risks, 2)}",
-        f"suggested posture: {result.portfolio_reason or 'Reduce exposure and avoid adding risk.'}",
+        f"position_context: {position_context}",
+        f"suggested posture: {suggested_posture}",
+        f"risk note: {result.portfolio_reason or 'Monitor the risk condition.'}",
     ]
 
 
@@ -272,7 +319,7 @@ def _rejected_block(result: SignalResult) -> list[str]:
     ]
 
 
-def _system_notes(results: list[SignalResult], portfolio_notes: list[str]) -> list[str]:
+def _system_notes(results: list[SignalResult], portfolio_notes: list[str], review_notes: list[str]) -> list[str]:
     lines: list[str] = []
     data_warnings = _unique([warning for result in results for warning in result.warnings])
     validation_warnings = _unique(
@@ -290,7 +337,44 @@ def _system_notes(results: list[SignalResult], portfolio_notes: list[str]) -> li
         lines.extend(["- portfolio heat warnings:"] + [f"  - {item}" for item in heat_warnings[:6]])
     if portfolio_notes:
         lines.extend(["- portfolio notes:"] + [f"  - {item}" for item in _unique(portfolio_notes)[:6]])
+    if review_notes:
+        lines.extend(["- decision review:"] + [f"  - {item}" for item in _unique(review_notes)[:4]])
     return lines
+
+
+def _plain_sections(body: str) -> list[tuple[str, list[str]]]:
+    sections: list[tuple[str, list[str]]] = []
+    title = "Header"
+    current: list[str] = []
+    for line in body.splitlines():
+        if line.startswith("[") and line.endswith("]"):
+            if current:
+                sections.append((title, current))
+            title = line.strip("[]")
+            current = []
+        else:
+            current.append(line)
+    if current:
+        sections.append((title, current))
+    return sections
+
+
+def _html_section(title: str, lines: list[str]) -> str:
+    accent = {
+        "Top Actions": "#22c55e",
+        "Deferred Ideas": "#38bdf8",
+        "Watch / Wait": "#a3e635",
+        "Risk Actions": "#f97316",
+        "Rejected Plans": "#ef4444",
+    }.get(title, "#64748b")
+    content = "<br>".join(escape(line) for line in lines if line != "")
+    return (
+        f"<section style=\"border-top:3px solid {accent};background:#1f2937;"
+        "padding:16px;margin:0 0 14px;border-radius:6px;\">"
+        f"<h2 style=\"margin:0 0 10px;font-size:18px;color:#f8fafc;\">{escape(title)}</h2>"
+        f"<div style=\"font-size:14px;line-height:1.55;color:#d1d5db;\">{content}</div>"
+        "</section>"
+    )
 
 
 def _compact_summary(items: list[str], limit: int = 2) -> str:

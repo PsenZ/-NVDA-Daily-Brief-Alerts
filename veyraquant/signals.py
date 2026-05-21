@@ -463,34 +463,37 @@ def classify_setup(
     config: AppConfig,
 ) -> str:
     t = tech.values
+    strategy = getattr(config, "strategy", None)
+    breakout_score_min = config.alert_score_threshold + getattr(strategy, "breakout_score_offset", 0)
+    pullback_score_min = config.alert_score_threshold + getattr(strategy, "pullback_score_offset", -5)
     ma_stack = t["sma5"] >= t["sma10"] >= t["sma20"]
     breakout = (
         ma_stack
-        and t["last"] >= t["high_20"] * 0.995
-        and t["vol_ratio_5"] >= 2.0
-        and t["close_position"] >= 0.7
-        and t["dist_ma5_pct"] <= 5
+        and t["last"] >= t["high_20"] * getattr(strategy, "breakout_high20_ratio", 0.995)
+        and t["vol_ratio_5"] >= getattr(strategy, "breakout_vol_ratio_5_min", 2.0)
+        and t["close_position"] >= getattr(strategy, "breakout_close_position_min", 0.7)
+        and t["dist_ma5_pct"] <= getattr(strategy, "breakout_max_dist_ma5_pct", 5.0)
     )
-    pullback_ma5 = ma_stack and abs(t["dist_ma5_pct"]) <= 1.0
-    pullback_ma10 = ma_stack and abs(t["dist_ma10_pct"]) <= 2.0
+    pullback_ma5 = ma_stack and abs(t["dist_ma5_pct"]) <= getattr(strategy, "pullback_ma5_distance_pct", 1.0)
+    pullback_ma10 = ma_stack and abs(t["dist_ma10_pct"]) <= getattr(strategy, "pullback_ma10_distance_pct", 2.0)
     pullback = (
         t["last"] > t["sma20"]
         and (pullback_ma5 or pullback_ma10)
-        and t["vol_ratio_5"] <= 0.7
-        and 42 <= t["rsi14"] <= 62
+        and t["vol_ratio_5"] <= getattr(strategy, "pullback_vol_ratio_5_max", 0.7)
+        and getattr(strategy, "pullback_rsi_min", 42.0) <= t["rsi14"] <= getattr(strategy, "pullback_rsi_max", 62.0)
     )
     intraday_breakout = bool(
         intraday
-        and intraday["price"] >= intraday["high_13"] * 0.998
-        and intraday["vol_ratio"] >= 2.0
+        and intraday["price"] >= intraday["high_13"] * getattr(strategy, "intraday_breakout_high13_ratio", 0.998)
+        and intraday["vol_ratio"] >= getattr(strategy, "intraday_breakout_vol_ratio_min", 2.0)
     )
-    if score >= config.alert_score_threshold and (breakout or intraday_breakout):
+    if score >= breakout_score_min and (breakout or intraday_breakout):
         return "breakout_entry"
-    if score >= config.alert_score_threshold - 5 and pullback:
+    if score >= pullback_score_min and pullback:
         return "pullback_add"
-    if score >= 55:
+    if score >= getattr(strategy, "hold_watch_score_min", 55):
         return "hold_watch"
-    if score <= 40 or t["rsi14"] > 74:
+    if score <= getattr(strategy, "risk_reduce_score_max", 40) or t["rsi14"] > getattr(strategy, "risk_reduce_rsi_overheat", 74.0):
         return "risk_reduce"
     return "wait"
 

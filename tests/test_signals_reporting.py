@@ -1,13 +1,19 @@
 from datetime import datetime
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
 
-from veyraquant.config import AppConfig, SmtpConfig
+from veyraquant.config import AppConfig, SmtpConfig, StrategyConfig
 from veyraquant.market import build_market_context
 from veyraquant.models import FundamentalsData, MarketContext, NewsBundle, SignalResult, TechSnapshot, TradePlan
-from veyraquant.reporting import compose_alert_email, compose_daily_report
-from veyraquant.signals import analyze_symbol, choose_signal_type
+from veyraquant.reporting import (
+    compose_alert_email,
+    compose_alert_email_html,
+    compose_daily_report,
+    compose_daily_report_html,
+)
+from veyraquant.signals import analyze_symbol, choose_signal_type, classify_setup
 from veyraquant.timeutils import SYDNEY_TZ
 
 
@@ -375,6 +381,76 @@ def test_alert_email_matches_entry_and_risk_styles():
     assert "Risk Alert" in risk_subject
     assert "suggested posture:" in risk_body
     assert "No buy/add trade plan is attached to this risk alert." in risk_body
+
+
+def test_html_reports_are_generated_with_plain_text_fallback_shape():
+    config = make_config()
+    market = MarketContext(
+        label="risk-on",
+        score=10.0,
+        reasons=["QQQ above SMA20"],
+        risks=[],
+        snapshots={},
+    )
+    result = make_result(
+        "NVDA",
+        "BUY_TRIGGER",
+        "breakout",
+        88,
+        rating="Buy",
+        setup_type="breakout_entry",
+        is_actionable=True,
+        plan_kind="buy",
+        entry_zone="$100.00 - $101.00",
+        stop="$98.00",
+        targets="$104.00 / $106.00",
+        position_pct=8.0,
+        max_loss_pct=0.4,
+        portfolio_decision="approved",
+        portfolio_reason="Approved.",
+    )
+
+    html = compose_daily_report_html(
+        [result],
+        market,
+        config,
+        datetime(2026, 4, 20, 7, 30, tzinfo=SYDNEY_TZ),
+        ["NVDA approved."],
+        ["setup_type:breakout_entry avg 5D alpha +2.00% over 2 resolved decision(s)."],
+    )
+    alert_html = compose_alert_email_html(result, datetime(2026, 4, 20, 7, 30, tzinfo=SYDNEY_TZ))
+
+    assert "<html" in html
+    assert "Executive Summary" in html
+    assert "Top Actions" in html
+    assert "decision review" in html
+    assert "<html" in alert_html
+    assert "NVDA Trade Alert" in alert_html
+
+
+def test_strategy_config_can_tighten_breakout_volume_without_changing_default_behavior():
+    tech = TechSnapshot(
+        {
+            "sma5": 103.0,
+            "sma10": 102.0,
+            "sma20": 101.0,
+            "last": 105.0,
+            "high_20": 105.1,
+            "vol_ratio_5": 2.2,
+            "close_position": 0.8,
+            "dist_ma5_pct": 1.0,
+            "dist_ma10_pct": 2.0,
+            "rsi14": 55.0,
+        }
+    )
+    default_config = SimpleNamespace(alert_score_threshold=65, strategy=StrategyConfig())
+    strict_config = SimpleNamespace(
+        alert_score_threshold=65,
+        strategy=StrategyConfig(breakout_vol_ratio_5_min=3.0),
+    )
+
+    assert classify_setup(tech, None, 70, default_config) == "breakout_entry"
+    assert classify_setup(tech, None, 70, strict_config) == "hold_watch"
 
 
 def test_breakout_requires_volume_and_negative_news_can_veto():

@@ -1,0 +1,11 @@
+{
+  "positions": [
+    {
+      "symbol": "NVDA",
+      "position_pct": 7.5,
+      "cost_basis": 900.25,
+      "opened_at": "2026-04-01",
+      "notes": "Example only. Copy to state/positions.json for local use."
+    }
+  ]
+}

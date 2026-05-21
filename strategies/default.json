@@ -1,0 +1,18 @@
+{
+  "breakout_score_offset": 0,
+  "breakout_high20_ratio": 0.995,
+  "breakout_vol_ratio_5_min": 2.0,
+  "breakout_close_position_min": 0.7,
+  "breakout_max_dist_ma5_pct": 5.0,
+  "intraday_breakout_high13_ratio": 0.998,
+  "intraday_breakout_vol_ratio_min": 2.0,
+  "pullback_score_offset": -5,
+  "pullback_ma5_distance_pct": 1.0,
+  "pullback_ma10_distance_pct": 2.0,
+  "pullback_vol_ratio_5_max": 0.7,
+  "pullback_rsi_min": 42.0,
+  "pullback_rsi_max": 62.0,
+  "hold_watch_score_min": 55,
+  "risk_reduce_score_max": 40,
+  "risk_reduce_rsi_overheat": 74.0
+}

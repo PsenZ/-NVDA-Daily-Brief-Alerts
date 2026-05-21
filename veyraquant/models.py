@@ -112,3 +112,10 @@ class SignalResult:
     portfolio_warnings: list[str] = field(default_factory=list)
     portfolio_decision: str = "watchlist"
     portfolio_reason: str = ""
+    has_open_position: bool = False
+    position_context: str = "No open position."
+    suggested_posture: str = "monitor-only"
+    approval_rank_score: float = 0.0
+    sector_bucket: str = ""
+    defer_reason_code: str = ""
+    approval_reason_code: str = ""

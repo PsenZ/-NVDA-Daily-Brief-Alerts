@@ -2,9 +2,9 @@
 
 ## Current Version
 
-- Version: `2.5.0`
-- Date: `2026-05-03`
-- Status: Added decision-layer strategy upgrades, portfolio approval, decision memory, and a new morning-brief format
+- Version: `2.6.0`
+- Date: `2026-05-21`
+- Status: Added position context, decision-review aggregation, strategy parameterization, enhanced portfolio approval metadata, and HTML email output
 
 ## Versioning Rules
 
@@ -13,6 +13,21 @@
 - `PATCH`: bug fix, test improvement, copy update, or operational hardening with no decision-model change.
 
 ## Changelog
+
+### 2.6.0
+
+- Added local position context through `POSITIONS_PATH`, defaulting to `state/positions.json`.
+- Added `positions.py` so `RISK_REDUCE` can distinguish open-position risk actions from monitor-only risk signals.
+- Added `has_open_position`, `position_context`, and `suggested_posture` fields to `SignalResult`.
+- Added `memory_review.py` and `python -m veyraquant.memory_review` for decision-log aggregation by setup, action, rating, market regime, and portfolio decision.
+- Added `raw_score`, `conviction_level`, and `decision_balance` to decision-log records for better review context.
+- Added `StrategyConfig` plus `STRATEGY_CONFIG_PATH`, with default strategy parameters in `strategies/default.json`.
+- Moved key breakout, pullback, and risk-reduce thresholds out of hard-coded signal logic while preserving default behavior.
+- Enhanced `decision_manager.py` with `approval_rank_score`, `sector_bucket`, `approval_reason_code`, and `defer_reason_code`.
+- Added HTML daily reports and HTML alert bodies while preserving plain-text fallback.
+- Upgraded `emailer.py` to send `multipart/alternative` messages when HTML is available.
+- Rewrote `README.md` into a clean project overview focused on features, strategy logic, configuration, and operation.
+- Added tests for position context, decision-review aggregation, strategy configuration, HTML rendering, and structured portfolio approval metadata.
 
 ### 2.5.0
 

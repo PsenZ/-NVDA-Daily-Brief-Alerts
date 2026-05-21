@@ -1,4 +1,5 @@
 ﻿import os
+import json
 from dataclasses import dataclass
 from typing import Optional
 
@@ -28,6 +29,44 @@ def _symbols_from_env() -> list[str]:
     raw = os.getenv("SYMBOLS") or os.getenv("SYMBOL") or "NVDA,TSLA,AAPL,AMD,MU,QQQ,SMH"
     symbols = [part.strip().upper() for part in raw.split(",") if part.strip()]
     return symbols or ["NVDA"]
+
+
+@dataclass(frozen=True)
+class StrategyConfig:
+    breakout_score_offset: int = 0
+    breakout_high20_ratio: float = 0.995
+    breakout_vol_ratio_5_min: float = 2.0
+    breakout_close_position_min: float = 0.7
+    breakout_max_dist_ma5_pct: float = 5.0
+    intraday_breakout_high13_ratio: float = 0.998
+    intraday_breakout_vol_ratio_min: float = 2.0
+    pullback_score_offset: int = -5
+    pullback_ma5_distance_pct: float = 1.0
+    pullback_ma10_distance_pct: float = 2.0
+    pullback_vol_ratio_5_max: float = 0.7
+    pullback_rsi_min: float = 42.0
+    pullback_rsi_max: float = 62.0
+    hold_watch_score_min: int = 55
+    risk_reduce_score_max: int = 40
+    risk_reduce_rsi_overheat: float = 74.0
+
+
+def _load_strategy_config(path: str) -> StrategyConfig:
+    if not path or not os.path.exists(path):
+        return StrategyConfig()
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except Exception:
+        return StrategyConfig()
+    if not isinstance(payload, dict):
+        return StrategyConfig()
+    allowed = set(StrategyConfig.__dataclass_fields__)
+    values = {key: value for key, value in payload.items() if key in allowed}
+    try:
+        return StrategyConfig(**values)
+    except Exception:
+        return StrategyConfig()
 
 
 @dataclass(frozen=True)
@@ -69,6 +108,9 @@ class AppConfig:
     max_entry_zone_width_reject_pct: float = 6.0
     memory_log_path: str = os.path.join("memory", "decision_log.jsonl")
     decision_memory_holding_days: int = 5
+    positions_path: str = os.path.join("state", "positions.json")
+    strategy_config_path: str = os.path.join("strategies", "default.json")
+    strategy: StrategyConfig = StrategyConfig()
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -82,6 +124,10 @@ class AppConfig:
         account_equity = float(account_equity_raw) if account_equity_raw else None
         subject_default = (
             f"{symbols[0]} 每日简报" if len(symbols) == 1 else "VeyraQuant 量化简报"
+        )
+
+        strategy_config_path = os.getenv(
+            "STRATEGY_CONFIG_PATH", os.path.join("strategies", "default.json")
         )
 
         return cls(
@@ -121,4 +167,7 @@ class AppConfig:
                 "MEMORY_LOG_PATH", os.path.join("memory", "decision_log.jsonl")
             ),
             decision_memory_holding_days=_int_env("DECISION_MEMORY_HOLDING_DAYS", 5),
+            positions_path=os.getenv("POSITIONS_PATH", os.path.join("state", "positions.json")),
+            strategy_config_path=strategy_config_path,
+            strategy=_load_strategy_config(strategy_config_path),
         )

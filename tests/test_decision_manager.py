@@ -98,3 +98,21 @@ def test_portfolio_manager_prefers_cleaner_validation_when_ranks_are_close():
 
     approved_symbols = [item.symbol for item in reviewed if item.portfolio_decision == "approved"]
     assert "AMD" in approved_symbols
+
+
+def test_portfolio_manager_adds_structured_reason_codes_and_rank_score():
+    market = MarketContext("妞嬪酣娅撻崑蹇撱偨", 18.0, ["QQQ strong"], [], {})
+    results = [
+        make_result("NVDA", "BUY_TRIGGER", 90, "high", sector_reason="semiconductor leader"),
+        make_result("AMD", "ADD_TRIGGER", 82, "medium", sector_reason="semiconductor follow-through"),
+        make_result("MU", "BUY_TRIGGER", 79, "medium", sector_reason="semiconductor catch-up"),
+    ]
+
+    reviewed, _notes = apply_portfolio_manager(results, market)
+    approved = [item for item in reviewed if item.portfolio_decision == "approved"]
+    deferred = [item for item in reviewed if item.portfolio_decision == "deferred"]
+
+    assert all(item.approval_rank_score > 0 for item in reviewed)
+    assert all(item.sector_bucket == "semiconductor" for item in reviewed)
+    assert all(item.approval_reason_code in {"approved_clean", "approved_with_validation_warning"} for item in approved)
+    assert deferred[0].defer_reason_code == "sector_concentration_deferred"

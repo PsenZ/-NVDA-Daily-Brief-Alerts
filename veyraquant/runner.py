@@ -4,8 +4,15 @@ from .decision_manager import apply_portfolio_manager
 from .emailer import send_email
 from .market import build_market_context
 from .memory import sync_decision_log
+from .memory_review import brief_review_notes
 from .models import SymbolData
-from .reporting import compose_alert_email, compose_daily_report
+from .positions import apply_position_context, load_positions
+from .reporting import (
+    compose_alert_email,
+    compose_alert_email_html,
+    compose_daily_report,
+    compose_daily_report_html,
+)
 from .signals import analyze_symbol, assign_ranks, enforce_portfolio_heat
 from .state import (
     already_sent_daily,
@@ -38,15 +45,17 @@ def run(config: AppConfig | None = None) -> int:
         return 0
 
     client = DataClient(config)
+    positions = load_positions(config.positions_path)
     market_histories = {symbol: client.fetch_market_daily(symbol) for symbol in config.market_symbols}
     market = build_market_context(market_histories)
     symbol_data_items = [client.fetch_symbol(symbol) for symbol in config.symbols]
-    results, portfolio_notes = build_results(symbol_data_items, market, config)
+    results, portfolio_notes = build_results(symbol_data_items, market, config, positions)
+    review_notes = brief_review_notes(config.memory_log_path)
 
     sent_any = False
     changed = False
     daily_sent, daily_changed = maybe_send_daily_report(
-        state, now_dt, results, market, portfolio_notes, config
+        state, now_dt, results, market, portfolio_notes, config, review_notes
     )
     if daily_sent:
         sent_any = True
@@ -68,7 +77,7 @@ def run(config: AppConfig | None = None) -> int:
     return 0
 
 
-def build_results(symbol_data_items: list[SymbolData], market, config: AppConfig):
+def build_results(symbol_data_items: list[SymbolData], market, config: AppConfig, positions=None):
     results = [
         analyze_symbol(
             item.symbol,
@@ -85,7 +94,8 @@ def build_results(symbol_data_items: list[SymbolData], market, config: AppConfig
     ]
     ranked = assign_ranks(results)
     heat_adjusted = enforce_portfolio_heat(ranked, config.portfolio_heat_max_pct)
-    return apply_portfolio_manager(heat_adjusted, market)
+    reviewed, portfolio_notes = apply_portfolio_manager(heat_adjusted, market)
+    return apply_position_context(reviewed, positions or {}), portfolio_notes
 
 
 def maybe_send_daily_report(
@@ -95,6 +105,7 @@ def maybe_send_daily_report(
     market,
     portfolio_notes,
     config: AppConfig,
+    review_notes=None,
 ) -> tuple[bool, bool]:
     if not config.force_daily_report and not daily_report_due(
         now_dt, config.send_hour, config.send_minute, config.send_window_minutes
@@ -105,13 +116,17 @@ def maybe_send_daily_report(
         print("Daily report skipped: already sent today.")
         return False, False
 
-    subject, body = compose_daily_report(results, market, config, now_dt, portfolio_notes)
+    subject, body = compose_daily_report(results, market, config, now_dt, portfolio_notes, review_notes)
+    try:
+        html_body = compose_daily_report_html(results, market, config, now_dt, portfolio_notes, review_notes)
+    except Exception:
+        html_body = None
     if config.dry_run:
         print(subject)
         print(body)
         return False, False
 
-    send_email(config.smtp, subject, body)
+    _send_email(config.smtp, subject, body, html_body)
     sync_decision_log(
         config.memory_log_path,
         now_dt,
@@ -153,12 +168,16 @@ def maybe_send_entry_alerts(state, now_dt, results, config: AppConfig) -> bool:
             continue
 
         subject, body = compose_alert_email(result, now_dt)
+        try:
+            html_body = compose_alert_email_html(result, now_dt)
+        except Exception:
+            html_body = None
         if config.dry_run:
             print(subject)
             print(body)
             continue
 
-        send_email(config.smtp, subject, body)
+        _send_email(config.smtp, subject, body, html_body)
         mark_alert_sent(
             state,
             result.symbol,
@@ -199,3 +218,13 @@ def _alert_channel(result, config: AppConfig) -> str | None:
         if getattr(config, "entry_alerts_enabled", True) and result.score >= config.alert_score_threshold:
             return "entry"
     return None
+
+
+def _send_email(smtp, subject, body, html_body=None) -> None:
+    try:
+        send_email(smtp, subject, body, html_body)
+    except TypeError as exc:
+        try:
+            send_email(smtp, subject, body)
+        except TypeError:
+            raise exc

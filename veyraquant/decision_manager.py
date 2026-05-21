@@ -27,6 +27,10 @@ def apply_portfolio_manager(
     approved_count = 0
 
     for result in results:
+        result.sector_bucket = _sector_for_symbol(result.symbol)
+        result.approval_rank_score = _candidate_rank_score(result)
+        result.approval_reason_code = ""
+        result.defer_reason_code = ""
         if result.action in ACTIONABLE_ACTIONS and result.is_actionable:
             result.portfolio_decision = "candidate"
             result.portfolio_reason = "Pending portfolio review."
@@ -44,9 +48,10 @@ def apply_portfolio_manager(
     ordered = sorted(candidates, key=_candidate_priority, reverse=True)
 
     for result in ordered:
-        sector = _sector_for_symbol(result.symbol)
+        sector = result.sector_bucket
         if approved_count >= approved_limit:
             result.portfolio_decision = "deferred"
+            result.defer_reason_code = "capacity_deferred"
             result.portfolio_reason = "Deferred because the daily approval limit is already full."
             notes.append(
                 f"{result.symbol} deferred after reaching the daily approval limit ({approved_limit})."
@@ -54,6 +59,7 @@ def apply_portfolio_manager(
             continue
         if sector_counts[sector] >= sector_limit:
             result.portfolio_decision = "deferred"
+            result.defer_reason_code = "sector_concentration_deferred"
             result.portfolio_reason = (
                 f"Deferred to avoid concentration in the {sector.replace('_', ' ')} bucket."
             )
@@ -63,6 +69,7 @@ def apply_portfolio_manager(
             continue
 
         result.portfolio_decision = "approved"
+        result.approval_reason_code = "approved_clean" if not result.validation_warnings else "approved_with_validation_warning"
         result.portfolio_reason = _approval_reason(result, sector)
         approved_count += 1
         sector_counts[sector] += 1
@@ -84,7 +91,20 @@ def _candidate_priority(result: SignalResult) -> tuple[int, int, int, int]:
         CONVICTION_WEIGHT.get(result.conviction_level, 1),
         validation_penalty,
         clean_heat,
-        result.score + rank_bonus,
+        int(_candidate_rank_score(result)) + rank_bonus,
+    )
+
+
+def _candidate_rank_score(result: SignalResult) -> float:
+    validation_penalty = 6 if result.validation_warnings else 0
+    heat_penalty = 4 if result.portfolio_warnings else 0
+    return round(
+        CONVICTION_WEIGHT.get(result.conviction_level, 1) * 25
+        + result.score
+        + min(max(result.raw_score - result.score, 0), 25)
+        - validation_penalty
+        - heat_penalty,
+        2,
     )
 
 
