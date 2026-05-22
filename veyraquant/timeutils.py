@@ -30,3 +30,7 @@ def is_regular_us_market_hours(now_dt_et: datetime) -> bool:
         return False
     minutes = now_dt_et.hour * 60 + now_dt_et.minute
     return 9 * 60 + 30 <= minutes <= 16 * 60
+
+
+def is_us_market_weekday(now_dt_et: datetime) -> bool:
+    return now_dt_et.weekday() < 5

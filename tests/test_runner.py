@@ -62,7 +62,6 @@ def test_force_daily_report_ignores_already_sent_today(monkeypatch):
 
 def test_non_actionable_signal_does_not_trigger_entry_alert(monkeypatch):
     sent = []
-    monkeypatch.setattr("veyraquant.runner.is_regular_us_market_hours", lambda _dt: True)
     monkeypatch.setattr("veyraquant.runner.send_email", lambda *args: sent.append(args))
 
     result = SimpleNamespace(
@@ -95,7 +94,6 @@ def test_non_actionable_signal_does_not_trigger_entry_alert(monkeypatch):
 
 def test_same_signal_hash_does_not_resend_within_cooldown(monkeypatch):
     sent = []
-    monkeypatch.setattr("veyraquant.runner.is_regular_us_market_hours", lambda _dt: True)
     monkeypatch.setattr("veyraquant.runner.compose_alert_email", lambda *args: ("subject", "body"))
     monkeypatch.setattr("veyraquant.runner.send_email", lambda *args: sent.append(args))
 
@@ -134,7 +132,6 @@ def test_same_signal_hash_does_not_resend_within_cooldown(monkeypatch):
 
 def test_changed_signal_hash_resends_within_cooldown(monkeypatch):
     sent = []
-    monkeypatch.setattr("veyraquant.runner.is_regular_us_market_hours", lambda _dt: True)
     monkeypatch.setattr("veyraquant.runner.compose_alert_email", lambda *args: ("subject", "body"))
     monkeypatch.setattr("veyraquant.runner.send_email", lambda *args: sent.append(args))
 
@@ -178,9 +175,84 @@ def test_changed_signal_hash_resends_within_cooldown(monkeypatch):
     assert state["alerts"]["NVDA"]["breakout_entry"]["reason"] == "signal_changed"
 
 
+def test_entry_alert_can_send_outside_regular_market_hours_on_us_weekday(monkeypatch):
+    sent = []
+    monkeypatch.setattr("veyraquant.runner.compose_alert_email", lambda *args: ("subject", "body"))
+    monkeypatch.setattr("veyraquant.runner.send_email", lambda *args: sent.append(args))
+
+    result = SimpleNamespace(
+        symbol="NVDA",
+        alert_kind="breakout_entry",
+        score=90,
+        is_actionable=True,
+        action="BUY_TRIGGER",
+        signal_hash="weekday-after-hours",
+        entry_zone="$100 - $101",
+        stop="$98",
+        targets="$104 / $106",
+        position_pct=8.0,
+        max_loss_pct=0.5,
+    )
+    config = SimpleNamespace(
+        entry_alerts_enabled=True,
+        risk_alerts_enabled=False,
+        alert_score_threshold=65,
+        alert_cooldown_hours=12,
+        dry_run=False,
+        smtp=object(),
+    )
+
+    sent_any = maybe_send_entry_alerts(
+        migrate_state({}),
+        datetime(2026, 4, 22, 10, 0, tzinfo=SYDNEY_TZ),
+        [result],
+        config,
+    )
+
+    assert sent_any
+    assert len(sent) == 1
+
+
+def test_entry_alert_skips_us_market_weekend(monkeypatch):
+    sent = []
+    monkeypatch.setattr("veyraquant.runner.compose_alert_email", lambda *args: ("subject", "body"))
+    monkeypatch.setattr("veyraquant.runner.send_email", lambda *args: sent.append(args))
+
+    result = SimpleNamespace(
+        symbol="NVDA",
+        alert_kind="breakout_entry",
+        score=90,
+        is_actionable=True,
+        action="BUY_TRIGGER",
+        signal_hash="weekend",
+        entry_zone="$100 - $101",
+        stop="$98",
+        targets="$104 / $106",
+        position_pct=8.0,
+        max_loss_pct=0.5,
+    )
+    config = SimpleNamespace(
+        entry_alerts_enabled=True,
+        risk_alerts_enabled=False,
+        alert_score_threshold=65,
+        alert_cooldown_hours=12,
+        dry_run=False,
+        smtp=object(),
+    )
+
+    sent_any = maybe_send_entry_alerts(
+        migrate_state({}),
+        datetime(2026, 4, 26, 10, 0, tzinfo=SYDNEY_TZ),
+        [result],
+        config,
+    )
+
+    assert not sent_any
+    assert sent == []
+
+
 def test_missing_intraday_quality_suppresses_entry_alert(monkeypatch):
     sent = []
-    monkeypatch.setattr("veyraquant.runner.is_regular_us_market_hours", lambda _dt: True)
     monkeypatch.setattr("veyraquant.runner.compose_alert_email", lambda *args: ("subject", "body"))
     monkeypatch.setattr("veyraquant.runner.send_email", lambda *args: sent.append(args))
 
@@ -219,7 +291,6 @@ def test_missing_intraday_quality_suppresses_entry_alert(monkeypatch):
 
 def test_legacy_state_without_signal_hash_does_not_crash(monkeypatch):
     sent = []
-    monkeypatch.setattr("veyraquant.runner.is_regular_us_market_hours", lambda _dt: True)
     monkeypatch.setattr("veyraquant.runner.compose_alert_email", lambda *args: ("subject", "body"))
     monkeypatch.setattr("veyraquant.runner.send_email", lambda *args: sent.append(args))
 
@@ -257,7 +328,6 @@ def test_legacy_state_without_signal_hash_does_not_crash(monkeypatch):
 
 def test_risk_reduce_does_not_send_when_risk_alerts_disabled(monkeypatch):
     sent = []
-    monkeypatch.setattr("veyraquant.runner.is_regular_us_market_hours", lambda _dt: True)
     monkeypatch.setattr("veyraquant.runner.send_email", lambda *args: sent.append(args))
 
     result = SimpleNamespace(
@@ -300,7 +370,6 @@ def test_risk_reduce_does_not_send_when_risk_alerts_disabled(monkeypatch):
 
 def test_risk_reduce_sends_when_risk_alerts_enabled(monkeypatch):
     sent = []
-    monkeypatch.setattr("veyraquant.runner.is_regular_us_market_hours", lambda _dt: True)
     monkeypatch.setattr("veyraquant.runner.send_email", lambda smtp, subject, body: sent.append((subject, body)))
 
     result = SimpleNamespace(
@@ -352,7 +421,6 @@ def test_risk_reduce_sends_when_risk_alerts_enabled(monkeypatch):
 
 def test_watch_wait_reject_still_do_not_send_entry_alerts(monkeypatch):
     sent = []
-    monkeypatch.setattr("veyraquant.runner.is_regular_us_market_hours", lambda _dt: True)
     monkeypatch.setattr("veyraquant.runner.send_email", lambda *args: sent.append(args))
 
     results = [

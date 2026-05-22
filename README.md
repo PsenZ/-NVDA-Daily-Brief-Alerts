@@ -2,13 +2,13 @@
 
 ## English
 
-VeyraQuant is a semi-automated swing-trading research assistant for a focused US equity watchlist. It generates daily decision briefs and optional intraday alerts, but it does not place orders, connect to a broker, or store brokerage credentials.
+VeyraQuant is a semi-automated swing-trading research assistant for a focused US equity watchlist. It generates daily decision briefs and optional opportunity/risk alerts on US market weekdays, but it does not place orders, connect to a broker, or store brokerage credentials.
 
 It is built for 5-20 symbols, free data sources first, and human-confirmed execution. The system emphasizes evidence, risk controls, portfolio approval, position context, and post-decision review.
 
 ## 中文
 
-VeyraQuant 是一个面向美股小型股票池的半自动波段交易研究助手。它会生成每日交易决策简报和可选的盘中提醒，但不会自动下单，不连接券商 API，也不会保存券商账户凭证。
+VeyraQuant 是一个面向美股小型股票池的半自动波段交易研究助手。它会生成每日交易决策简报，并在美股工作日全天候检查可选机会/风险提醒，但不会自动下单，不连接券商 API，也不会保存券商账户凭证。
 
 系统适合 5-20 个标的，优先使用免费数据源，所有交易计划都需要人工确认。核心重点是：证据、风控、组合审批、持仓上下文和决策复盘。
 
@@ -282,6 +282,19 @@ Daily brief sections:
 Opportunity alerts and risk alerts use the same action-plus-reason language as the daily brief.
 
 机会提醒和风险提醒使用与日报一致的“行动 + 理由”语言。
+
+Alert timing:
+
+提醒时间：
+
+- GitHub Actions runs every 20 minutes.
+- GitHub Actions 每 20 分钟运行一次。
+- Daily reports follow the configured Sydney-time send window.
+- 日报按照配置的悉尼时间发送窗口执行。
+- Opportunity and risk alerts are checked all day on US market weekdays, not only during regular US trading hours.
+- 机会提醒和风险提醒会在美股工作日全天候检查，不再限制为美股常规交易时段。
+- Alerts are skipped on US market weekends.
+- 美股周末不开盘时不发送提醒。
 
 ## Configuration / 配置
 

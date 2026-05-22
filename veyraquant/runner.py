@@ -22,7 +22,7 @@ from .state import (
     should_send_alert,
     write_state,
 )
-from .timeutils import US_EASTERN_TZ, daily_report_due, is_regular_us_market_hours, now_sydney
+from .timeutils import US_EASTERN_TZ, daily_report_due, is_us_market_weekday, now_sydney
 
 
 def run(config: AppConfig | None = None) -> int:
@@ -36,11 +36,11 @@ def run(config: AppConfig | None = None) -> int:
     )
     alerts_due = (
         (config.entry_alerts_enabled or getattr(config, "risk_alerts_enabled", False))
-        and is_regular_us_market_hours(now_dt_et)
+        and is_us_market_weekday(now_dt_et)
     )
     if not daily_due and not alerts_due:
         print("Daily report skipped: before send threshold or already sent today.")
-        print("Entry and risk alerts skipped: outside regular US market hours or disabled.")
+        print("Entry and risk alerts skipped: disabled or US market weekend.")
         print("Nothing sent; state unchanged.")
         return 0
 
@@ -148,8 +148,8 @@ def maybe_send_entry_alerts(state, now_dt, results, config: AppConfig) -> bool:
         print("Entry and risk alerts disabled.")
         return False
     now_dt_et = now_dt.astimezone(US_EASTERN_TZ)
-    if not is_regular_us_market_hours(now_dt_et):
-        print("Entry and risk alerts skipped: outside regular US market hours.")
+    if not is_us_market_weekday(now_dt_et):
+        print("Entry and risk alerts skipped: US market weekend.")
         return False
 
     sent_any = False

@@ -2,9 +2,9 @@
 
 ## Current Version
 
-- Version: `2.9.0`
+- Version: `2.9.1`
 - Date: `2026-05-22`
-- Status: Added structured numeric trade-plan fields for safer validation
+- Status: Changed alerts to all-day checks on US market weekdays
 
 ## Versioning Rules
 
@@ -13,6 +13,13 @@
 - `PATCH`: bug fix, test improvement, copy update, or operational hardening with no decision-model change.
 
 ## Changelog
+
+### 2.9.1
+
+- Changed opportunity and risk alert evaluation from regular US market hours only to all-day checks on US market weekdays.
+- Kept alerts disabled on US market weekends.
+- Kept daily report timing unchanged, so the daily brief still follows the configured Sydney-time send window.
+- Added tests proving weekday after-hours alerts can send and US-market-weekend alerts are skipped.
 
 ### 2.9.0
 
