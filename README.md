@@ -155,6 +155,34 @@ PRICE_CACHE_ACTIONABLE_MAX_AGE_HOURS=24
 PRICE_CACHE_INVALID_MAX_AGE_HOURS=72
 ```
 
+## Structured Trade Plan / 结构化交易计划
+
+Trade plans keep human-readable display fields and numeric validation fields separate.
+
+交易计划现在同时保留给人看的展示字段，以及给系统校验用的数字字段。
+
+Display fields:
+
+展示字段：
+
+- `entry_zone`
+- `stop`
+- `targets`
+
+Numeric fields:
+
+数字字段：
+
+- `entry_low`
+- `entry_high`
+- `stop_price`
+- `target1`
+- `target2`
+
+The validator now uses numeric fields first and only falls back to parsing display strings for backward compatibility. This keeps email formatting changes from accidentally changing risk validation.
+
+校验器会优先使用数字字段，只在兼容旧调用时才回退解析展示字符串。这样即使邮件展示格式调整，也不会影响风控校验逻辑。
+
 ## Position Context / 持仓上下文
 
 Risk signals can be evaluated against a local private position file.

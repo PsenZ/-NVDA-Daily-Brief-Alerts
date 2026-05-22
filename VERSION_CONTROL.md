@@ -2,9 +2,9 @@
 
 ## Current Version
 
-- Version: `2.8.0`
-- Date: `2026-05-21`
-- Status: Added Data Quality Gate for stale cache and degraded data handling
+- Version: `2.9.0`
+- Date: `2026-05-22`
+- Status: Added structured numeric trade-plan fields for safer validation
 
 ## Versioning Rules
 
@@ -13,6 +13,14 @@
 - `PATCH`: bug fix, test improvement, copy update, or operational hardening with no decision-model change.
 
 ## Changelog
+
+### 2.9.0
+
+- Added numeric trade-plan fields: `entry_low`, `entry_high`, `stop_price`, `target1`, and `target2`.
+- Updated generated `BUY_TRIGGER` and `ADD_TRIGGER` plans to populate numeric fields while keeping human-readable `entry_zone`, `stop`, and `targets` text.
+- Updated the trade-plan validator to prefer numeric fields and use string parsing only as backward-compatible fallback.
+- Added regression tests proving validation no longer depends on display-string formatting when numeric plan fields are available.
+- Kept non-actionable plans compatible with the existing report and alert display contract.
 
 ### 2.8.0
 

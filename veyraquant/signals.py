@@ -612,6 +612,11 @@ def _build_trade_plan(action: str, tech: TechSnapshot, config: AppConfig) -> Tra
         cancel=cancel,
         account_equity=config.account_equity,
         position_value=sizing.position_value,
+        entry_low=entry_low,
+        entry_high=entry_high,
+        stop_price=stop,
+        target1=target1,
+        target2=target2,
     )
 
 

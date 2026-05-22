@@ -3,7 +3,7 @@ import pandas as pd
 
 from veyraquant.config import AppConfig, SmtpConfig
 from veyraquant.models import FundamentalsData, MarketContext, NewsBundle, TechSnapshot, TradePlan
-from veyraquant.signals import analyze_symbol
+from veyraquant.signals import analyze_symbol, build_trade_plan
 from veyraquant.validator import validate_trade_plan
 
 
@@ -41,6 +41,11 @@ def make_plan(
     position_pct=10.0,
     max_loss_pct=0.3,
     rr=1.5,
+    entry_low=None,
+    entry_high=None,
+    stop_price=None,
+    target1=None,
+    target2=None,
 ):
     return TradePlan(
         entry_zone=entry_zone,
@@ -53,6 +58,11 @@ def make_plan(
         cancel="cancel",
         account_equity=100_000,
         position_value=10_000,
+        entry_low=entry_low,
+        entry_high=entry_high,
+        stop_price=stop_price,
+        target1=target1,
+        target2=target2,
     )
 
 
@@ -203,6 +213,55 @@ def test_validator_rejects_missing_critical_fields():
     assert any("entry zone" in item for item in result.errors)
     assert any("stop" in item for item in result.errors)
     assert any("target1" in item for item in result.errors)
+
+
+def test_validator_prefers_numeric_fields_over_display_strings():
+    plan = make_plan(
+        entry_zone="human display only",
+        stop="display stop",
+        targets="display targets",
+        entry_low=100.0,
+        entry_high=101.0,
+        stop_price=98.0,
+        target1=104.0,
+        target2=106.0,
+    )
+
+    result = validate_trade_plan(plan, make_config())
+
+    assert result.is_valid
+    assert result.errors == []
+
+
+def test_validator_rejects_numeric_fields_even_when_display_strings_look_valid():
+    plan = make_plan(
+        entry_zone="$100.00 - $101.00",
+        stop="$98.00",
+        targets="$104.00 / $106.00",
+        entry_low=100.0,
+        entry_high=101.0,
+        stop_price=100.0,
+        target1=104.0,
+    )
+
+    result = validate_trade_plan(plan, make_config())
+
+    assert not result.is_valid
+    assert any("entry_low" in item for item in result.errors)
+
+
+def test_generated_trade_plan_populates_numeric_fields():
+    buy_plan = build_trade_plan("BUY_TRIGGER", breakout_snapshot(), make_config())
+    add_plan = build_trade_plan("ADD_TRIGGER", pullback_snapshot(), make_config())
+
+    for plan in (buy_plan, add_plan):
+        assert plan.entry_low is not None
+        assert plan.entry_high is not None
+        assert plan.stop_price is not None
+        assert plan.target1 is not None
+        assert plan.target2 is not None
+        assert plan.entry_high > plan.entry_low
+        assert plan.target1 > plan.entry_high
 
 
 def test_analyze_symbol_rejects_invalid_actionable_plan(monkeypatch):

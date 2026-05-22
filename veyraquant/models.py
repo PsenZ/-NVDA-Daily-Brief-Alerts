@@ -88,6 +88,11 @@ class TradePlan:
     cancel: str
     account_equity: Optional[float] = None
     position_value: Optional[float] = None
+    entry_low: Optional[float] = None
+    entry_high: Optional[float] = None
+    stop_price: Optional[float] = None
+    target1: Optional[float] = None
+    target2: Optional[float] = None
 
 
 @dataclass

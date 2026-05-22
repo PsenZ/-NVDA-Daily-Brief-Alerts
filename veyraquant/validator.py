@@ -15,9 +15,13 @@ def validate_trade_plan(plan: TradePlan, config: AppConfig) -> ValidationResult:
     errors: list[str] = []
     warnings: list[str] = []
 
-    entry_low, entry_high = _parse_entry_zone(plan.entry_zone)
-    stop = _parse_money(plan.stop)
-    target1 = _parse_first_target(plan.targets)
+    entry_low, entry_high = _plan_entry_zone(plan)
+    stop = _parse_float(plan.stop_price)
+    if stop is None:
+        stop = _parse_money(plan.stop)
+    target1 = _parse_float(plan.target1)
+    if target1 is None:
+        target1 = _parse_first_target(plan.targets)
     rr = _parse_float(plan.rr)
     position_pct = _parse_float(plan.position_pct)
     max_loss_pct = _parse_float(plan.max_loss_pct)
@@ -71,6 +75,16 @@ def validate_trade_plan(plan: TradePlan, config: AppConfig) -> ValidationResult:
         )
 
     return ValidationResult(is_valid=not errors, errors=errors, warnings=warnings)
+
+
+def _plan_entry_zone(plan: TradePlan) -> tuple[float | None, float | None]:
+    fallback_low, fallback_high = _parse_entry_zone(plan.entry_zone)
+    entry_low = _parse_float(plan.entry_low)
+    entry_high = _parse_float(plan.entry_high)
+    return (
+        entry_low if entry_low is not None else fallback_low,
+        entry_high if entry_high is not None else fallback_high,
+    )
 
 
 def _parse_entry_zone(value: str) -> tuple[float | None, float | None]:
