@@ -155,6 +155,7 @@ def compose_alert_email(result: SignalResult, now_dt: datetime) -> tuple[str, st
         "",
         f"rating/action: {result.rating} / {result.action}",
         f"score/setup: {_score_label(result)} / {result.setup_type}",
+        f"data_quality: {result.data_quality.data_quality_level}",
         f"plan: {result.entry_zone} | stop {result.stop} | targets {result.targets}",
         f"risk budget: position {result.position_pct:.2f}% | max loss {result.max_loss_pct:.2f}%",
         f"why now: {_compact_summary(result.bull_case, 2)}",
@@ -328,9 +329,19 @@ def _system_notes(results: list[SignalResult], portfolio_notes: list[str], revie
     heat_warnings = _unique(
         [warning for result in results for warning in result.portfolio_warnings]
     )
+    data_quality_notes = _unique(
+        [
+            f"{result.symbol}: {result.data_quality.data_quality_level} - "
+            f"{_compact_summary(result.data_quality.reasons, 2)}"
+            for result in results
+            if result.data_quality.data_quality_level != "HIGH" or result.data_quality.reasons
+        ]
+    )
 
     if data_warnings:
         lines.extend(["- data warnings:"] + [f"  - {item}" for item in data_warnings[:6]])
+    if data_quality_notes:
+        lines.extend(["- data quality:"] + [f"  - {item}" for item in data_quality_notes[:6]])
     if validation_warnings:
         lines.extend(["- validation warnings:"] + [f"  - {item}" for item in validation_warnings[:6]])
     if heat_warnings:

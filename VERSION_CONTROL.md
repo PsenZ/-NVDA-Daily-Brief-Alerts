@@ -2,9 +2,9 @@
 
 ## Current Version
 
-- Version: `2.7.0`
+- Version: `2.8.0`
 - Date: `2026-05-21`
-- Status: Added Portfolio Risk Guard with sector risk and position budgets
+- Status: Added Data Quality Gate for stale cache and degraded data handling
 
 ## Versioning Rules
 
@@ -13,6 +13,15 @@
 - `PATCH`: bug fix, test improvement, copy update, or operational hardening with no decision-model change.
 
 ## Changelog
+
+### 2.8.0
+
+- Added `DataQuality` metadata for symbol data, including price freshness, intraday freshness, fundamentals freshness, options/news availability, cache age, and quality level.
+- Added stale daily cache protection: stale or missing daily price data cannot produce `BUY_TRIGGER` or `ADD_TRIGGER`.
+- Added configurable freshness thresholds with `PRICE_CACHE_ACTIONABLE_MAX_AGE_HOURS` and `PRICE_CACHE_INVALID_MAX_AGE_HOURS`.
+- Added intraday alert gating so missing intraday data can still appear in the daily report but will not trigger entry alerts.
+- Added report-level data quality notes for degraded symbols.
+- Added tests for stale cache quality, low-quality signal downgrade, and intraday-alert suppression.
 
 ### 2.7.0
 

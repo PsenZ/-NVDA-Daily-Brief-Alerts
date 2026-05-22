@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from veyraquant.config import AppConfig, SmtpConfig
-from veyraquant.models import FundamentalsData, MarketContext, NewsBundle, SignalResult, TechSnapshot, TradePlan
+from veyraquant.models import DataQuality, FundamentalsData, MarketContext, NewsBundle, SignalResult, TechSnapshot, TradePlan
 from veyraquant.reporting import compose_alert_email, compose_daily_report
 from veyraquant.signals import analyze_symbol, enforce_portfolio_heat
 from veyraquant.timeutils import SYDNEY_TZ
@@ -273,6 +273,38 @@ def test_buy_and_add_triggers_keep_full_trade_plans(monkeypatch):
     assert add_result.action == "ADD_TRIGGER"
     assert_result_consistency(buy_result)
     assert_result_consistency(add_result)
+
+
+def test_low_data_quality_blocks_actionable_trade_plan(monkeypatch):
+    monkeypatch.setattr("veyraquant.signals.tech_summary", lambda _daily: breakout_snapshot())
+    monkeypatch.setattr("veyraquant.signals.intraday_snapshot", lambda _intraday: None)
+    monkeypatch.setattr("veyraquant.signals.score_components", lambda *args, **kwargs: score_result(72))
+    quality = DataQuality(
+        price_freshness="cache",
+        cache_age_hours=80.0,
+        data_quality_level="LOW",
+        actionable_allowed=False,
+        intraday_alert_allowed=False,
+        reasons=["daily price cache age 80.0h exceeds invalid threshold 72.0h"],
+    )
+
+    result = analyze_symbol(
+        "NVDA",
+        dummy_daily(),
+        None,
+        FundamentalsData(),
+        None,
+        news_bundle(0.3),
+        bullish_market(),
+        make_config(),
+        data_quality=quality,
+    )
+
+    assert result.setup_type == "breakout_entry"
+    assert result.action == "WAIT"
+    assert "data_quality_gate" in result.suppressed_by
+    assert result.data_quality.data_quality_level == "LOW"
+    assert_result_consistency(result)
 
 
 def test_signal_result_new_fields_have_safe_defaults():

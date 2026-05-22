@@ -8,6 +8,7 @@ import pandas as pd
 from .config import AppConfig
 from .indicators import adx, atr, bollinger_bands, macd, pct_change, rsi, volume_ratio
 from .models import (
+    DataQuality,
     FundamentalsData,
     MarketContext,
     NewsBundle,
@@ -167,9 +168,14 @@ def analyze_symbol(
     market: MarketContext,
     config: AppConfig,
     warnings: Optional[list[str]] = None,
+    data_quality: Optional[DataQuality] = None,
 ) -> SignalResult:
     warnings = list(warnings or [])
+    data_quality = data_quality or DataQuality()
     if daily is None or daily.empty or len(daily) < 60:
+        data_quality.data_quality_level = "LOW"
+        data_quality.actionable_allowed = False
+        data_quality.reasons.append("daily history is unavailable or too short")
         plan = _non_actionable_plan(
             plan_kind="wait",
             entry_zone="Waiting for cleaner data.",
@@ -194,6 +200,7 @@ def analyze_symbol(
             alert_kind="wait",
             last_price=None,
             warnings=warnings,
+            data_quality=data_quality,
         )
         return annotate_signal_result(result, market)
 
@@ -207,6 +214,10 @@ def analyze_symbol(
 
     setup_type = classify_setup(tech, intraday_data, score, config)
     action, suppressed_by = apply_action_policy(setup_type, score, market, news, config)
+    if action in ACTIONABLE_ACTIONS and not data_quality.actionable_allowed:
+        risks.extend(data_quality.reasons[:3])
+        suppressed_by.append("data_quality_gate")
+        action = "WAIT"
     if action in ACTIONABLE_ACTIONS:
         preview_plan = preview_trade_plan(action, tech, config)
         if preview_plan.rr < config.min_rr and preview_plan.position_pct > 0:
@@ -268,6 +279,7 @@ def analyze_symbol(
         warnings=warnings,
         rejection_reasons=rejection_reasons,
         validation_warnings=validation_warnings,
+        data_quality=data_quality,
     )
     return annotate_signal_result(result, market)
 
@@ -680,6 +692,7 @@ def _result(
     warnings: Optional[list[str]] = None,
     rejection_reasons: Optional[list[str]] = None,
     validation_warnings: Optional[list[str]] = None,
+    data_quality: Optional[DataQuality] = None,
 ) -> SignalResult:
     hash_input = f"{symbol}|{action}|{score}|{plan.entry_zone}|{plan.stop}|{plan.targets}"
     signal_hash = hashlib.sha1(hash_input.encode("utf-8")).hexdigest()[:12]
@@ -710,6 +723,7 @@ def _result(
         suppressed_by=suppressed_by,
         plan_kind=plan_kind,
         validation_warnings=validation_warnings or [],
+        data_quality=data_quality or DataQuality(),
     )
 
 
@@ -767,11 +781,15 @@ def _derive_bear_case(result: SignalResult) -> list[str]:
 
 
 def _conviction_level(result: SignalResult) -> str:
+    if result.data_quality.data_quality_level == "LOW":
+        return "low"
     if result.action == "REJECT":
         return "low"
     if result.portfolio_warnings or len(result.validation_warnings) >= 2:
         return "low"
     if result.action in ACTIONABLE_ACTIONS and result.score >= 80 and not result.validation_warnings:
+        if result.data_quality.data_quality_level == "MEDIUM":
+            return "medium"
         return "high"
     if result.action in ACTIONABLE_ACTIONS and result.score >= 65:
         return "medium"

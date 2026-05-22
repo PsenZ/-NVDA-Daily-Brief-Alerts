@@ -89,6 +89,7 @@ def build_results(symbol_data_items: list[SymbolData], market, config: AppConfig
             market,
             config,
             item.warnings,
+            item.data_quality,
         )
         for item in symbol_data_items
     ]
@@ -215,6 +216,9 @@ def _alert_channel(result, config: AppConfig) -> str | None:
     if not getattr(result, "is_actionable", False):
         return None
     if result.alert_kind in {"breakout_entry", "pullback_add"}:
+        data_quality = getattr(result, "data_quality", None)
+        if data_quality is not None and not getattr(data_quality, "intraday_alert_allowed", True):
+            return None
         if getattr(config, "entry_alerts_enabled", True) and result.score >= config.alert_score_threshold:
             return "entry"
     return None

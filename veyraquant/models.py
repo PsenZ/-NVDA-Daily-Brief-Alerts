@@ -37,6 +37,20 @@ class NewsBundle:
 
 
 @dataclass
+class DataQuality:
+    price_freshness: str = "unknown"
+    intraday_freshness: str = "unknown"
+    fundamentals_freshness: str = "unknown"
+    options_available: bool = False
+    news_available: bool = False
+    cache_age_hours: Optional[float] = None
+    data_quality_level: str = "MEDIUM"
+    actionable_allowed: bool = True
+    intraday_alert_allowed: bool = True
+    reasons: list[str] = field(default_factory=list)
+
+
+@dataclass
 class SymbolData:
     symbol: str
     daily: Optional[pd.DataFrame]
@@ -45,6 +59,7 @@ class SymbolData:
     options: Optional[OptionsData]
     news: NewsBundle
     warnings: list[str] = field(default_factory=list)
+    data_quality: DataQuality = field(default_factory=DataQuality)
 
 
 @dataclass
@@ -121,3 +136,4 @@ class SignalResult:
     approval_reason_code: str = ""
     sector_risk_after: float = 0.0
     sector_position_after: float = 0.0
+    data_quality: DataQuality = field(default_factory=DataQuality)

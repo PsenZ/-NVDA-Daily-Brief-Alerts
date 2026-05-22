@@ -2,6 +2,7 @@
 import math
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import quote
@@ -10,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from .config import AppConfig
-from .models import FundamentalsData, NewsBundle, OptionsData, SymbolData
+from .models import DataQuality, FundamentalsData, NewsBundle, OptionsData, SymbolData
 
 
 POSITIVE_WORDS = {
@@ -97,37 +98,59 @@ class DataClient:
 
     def fetch_symbol(self, symbol: str) -> SymbolData:
         warnings: list[str] = []
+        quality = DataQuality()
         ticker = self._ticker(symbol, warnings)
-        daily, intraday = self.fetch_price_history(symbol, ticker, warnings)
-        fundamentals = self.fetch_fundamentals(symbol, ticker, warnings)
+        daily, intraday = self.fetch_price_history(symbol, ticker, warnings, quality)
+        fundamentals = self.fetch_fundamentals(symbol, ticker, warnings, quality)
         options = self.fetch_options(symbol, ticker, warnings)
         news = self.fetch_news(symbol, warnings)
-        return SymbolData(symbol, daily, intraday, fundamentals, options, news, warnings)
+        quality.options_available = options is not None
+        quality.news_available = bool(news.news or news.social)
+        self._finalize_data_quality(symbol, quality, warnings)
+        return SymbolData(symbol, daily, intraday, fundamentals, options, news, warnings, quality)
 
     def fetch_market_daily(self, symbol: str) -> Optional[pd.DataFrame]:
         warnings: list[str] = []
         ticker = self._ticker(symbol, warnings)
         return self._fetch_history(symbol, ticker, "daily", "1y", "1d", warnings)
 
-    def fetch_price_history(self, symbol: str, ticker: Any, warnings: list[str]) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
-        daily = self._fetch_history(symbol, ticker, "daily", "1y", "1d", warnings)
+    def fetch_price_history(
+        self,
+        symbol: str,
+        ticker: Any,
+        warnings: list[str],
+        quality: DataQuality | None = None,
+    ) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+        daily = self._fetch_history(symbol, ticker, "daily", "1y", "1d", warnings, quality)
         intraday = self._fetch_history(
-            symbol, ticker, "intraday", "10d", self.config.intraday_interval, warnings
+            symbol, ticker, "intraday", "10d", self.config.intraday_interval, warnings, quality
         )
         return daily, intraday
 
-    def fetch_fundamentals(self, symbol: str, ticker: Any, warnings: list[str]) -> FundamentalsData:
+    def fetch_fundamentals(
+        self,
+        symbol: str,
+        ticker: Any,
+        warnings: list[str],
+        quality: DataQuality | None = None,
+    ) -> FundamentalsData:
         cache_path = self.cache_dir / f"{safe_cache_key(symbol)}_fundamentals.json"
         info: dict[str, Any] = {}
         if ticker is not None:
             try:
                 info = ticker.info or {}
                 self._write_json(cache_path, info)
+                if quality is not None:
+                    quality.fundamentals_freshness = "live"
             except Exception as exc:
                 warnings.append(f"{symbol} 基本面实时数据不可用，尝试使用缓存: {exc}")
                 info = self._read_json(cache_path) or {}
+                if quality is not None:
+                    quality.fundamentals_freshness = "cache" if info else "missing"
         else:
             info = self._read_json(cache_path) or {}
+            if quality is not None:
+                quality.fundamentals_freshness = "cache" if info else "missing"
 
         return FundamentalsData(
             market_cap=info.get("marketCap"),
@@ -245,6 +268,7 @@ class DataClient:
         period: str,
         interval: str,
         warnings: list[str],
+        quality: DataQuality | None = None,
     ) -> Optional[pd.DataFrame]:
         cache_path = self.cache_dir / f"{safe_cache_key(symbol)}_{name}.csv"
         if ticker is not None:
@@ -253,6 +277,7 @@ class DataClient:
                 data = self._clean_price_frame(data)
                 if data is not None and not data.empty:
                     data.to_csv(cache_path, encoding="utf-8")
+                    self._mark_history_quality(quality, name, "live", None)
                     return data
                 warnings.append(f"{symbol} {name} 行情为空，尝试使用缓存")
             except Exception as exc:
@@ -260,9 +285,93 @@ class DataClient:
 
         cached = self._read_price_cache(cache_path)
         if cached is None or cached.empty:
+            self._mark_history_quality(quality, name, "missing", None)
             warnings.append(f"{symbol} {name} 无可用缓存")
             return None
+        cache_age = self._cache_age_hours(cache_path)
+        self._mark_history_quality(quality, name, "cache", cache_age)
+        if cache_age is not None:
+            warnings.append(f"{symbol} {name} using cached data age {cache_age:.1f}h.")
         return cached
+
+    @staticmethod
+    def _mark_history_quality(
+        quality: DataQuality | None,
+        name: str,
+        freshness: str,
+        cache_age_hours: float | None,
+    ) -> None:
+        if quality is None:
+            return
+        if name == "daily":
+            quality.price_freshness = freshness
+        elif name == "intraday":
+            quality.intraday_freshness = freshness
+        if cache_age_hours is not None:
+            if quality.cache_age_hours is None:
+                quality.cache_age_hours = round(cache_age_hours, 2)
+            else:
+                quality.cache_age_hours = round(max(quality.cache_age_hours, cache_age_hours), 2)
+
+    @staticmethod
+    def _cache_age_hours(path: Path) -> float | None:
+        try:
+            return max(0.0, (time.time() - path.stat().st_mtime) / 3600)
+        except Exception:
+            return None
+
+    def _finalize_data_quality(
+        self, symbol: str, quality: DataQuality, warnings: list[str]
+    ) -> None:
+        level = "HIGH"
+        reasons: list[str] = []
+        if quality.price_freshness == "missing":
+            level = "LOW"
+            quality.actionable_allowed = False
+            reasons.append("daily price data is missing")
+        elif quality.price_freshness == "cache":
+            age = quality.cache_age_hours
+            if age is None:
+                level = "LOW"
+                quality.actionable_allowed = False
+                reasons.append("daily price cache age is unknown")
+            elif age > self.config.price_cache_invalid_max_age_hours:
+                level = "LOW"
+                quality.actionable_allowed = False
+                reasons.append(
+                    f"daily price cache age {age:.1f}h exceeds invalid threshold "
+                    f"{self.config.price_cache_invalid_max_age_hours:.1f}h"
+                )
+            elif age > self.config.price_cache_actionable_max_age_hours:
+                level = "LOW"
+                quality.actionable_allowed = False
+                reasons.append(
+                    f"daily price cache age {age:.1f}h exceeds actionable threshold "
+                    f"{self.config.price_cache_actionable_max_age_hours:.1f}h"
+                )
+
+        if quality.intraday_freshness in {"missing", "unknown"}:
+            quality.intraday_alert_allowed = False
+            reasons.append("intraday data is missing; entry alerts are disabled")
+            if level == "HIGH":
+                level = "MEDIUM"
+        if quality.fundamentals_freshness in {"missing", "unknown"}:
+            reasons.append("fundamentals data is missing or cached")
+            if level == "HIGH":
+                level = "MEDIUM"
+        if not quality.options_available:
+            reasons.append("options data is unavailable")
+            if level == "HIGH":
+                level = "MEDIUM"
+        if not quality.news_available:
+            reasons.append("news/social data is unavailable")
+            if level == "HIGH":
+                level = "MEDIUM"
+
+        quality.data_quality_level = level
+        quality.reasons = reasons
+        if reasons:
+            warnings.append(f"{symbol} data_quality={level}: " + "; ".join(reasons[:4]))
 
     @staticmethod
     def _clean_price_frame(data: Any) -> Optional[pd.DataFrame]:

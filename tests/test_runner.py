@@ -1,6 +1,7 @@
 from datetime import datetime
 from types import SimpleNamespace
 
+from veyraquant.models import DataQuality
 from veyraquant.runner import maybe_send_daily_report, maybe_send_entry_alerts
 from veyraquant.state import mark_daily_sent, migrate_state
 from veyraquant.timeutils import SYDNEY_TZ
@@ -175,6 +176,45 @@ def test_changed_signal_hash_resends_within_cooldown(monkeypatch):
     assert len(sent) == 1
     assert state["alerts"]["NVDA"]["breakout_entry"]["signal_hash"] == "new-hash"
     assert state["alerts"]["NVDA"]["breakout_entry"]["reason"] == "signal_changed"
+
+
+def test_missing_intraday_quality_suppresses_entry_alert(monkeypatch):
+    sent = []
+    monkeypatch.setattr("veyraquant.runner.is_regular_us_market_hours", lambda _dt: True)
+    monkeypatch.setattr("veyraquant.runner.compose_alert_email", lambda *args: ("subject", "body"))
+    monkeypatch.setattr("veyraquant.runner.send_email", lambda *args: sent.append(args))
+
+    result = SimpleNamespace(
+        symbol="NVDA",
+        alert_kind="breakout_entry",
+        score=90,
+        is_actionable=True,
+        action="BUY_TRIGGER",
+        signal_hash="new-hash",
+        data_quality=DataQuality(
+            data_quality_level="MEDIUM",
+            intraday_alert_allowed=False,
+            reasons=["intraday data is missing; entry alerts are disabled"],
+        ),
+    )
+    config = SimpleNamespace(
+        entry_alerts_enabled=True,
+        risk_alerts_enabled=False,
+        alert_score_threshold=65,
+        alert_cooldown_hours=12,
+        dry_run=False,
+        smtp=object(),
+    )
+
+    sent_any = maybe_send_entry_alerts(
+        migrate_state({}),
+        datetime(2026, 4, 22, 10, 0, tzinfo=SYDNEY_TZ),
+        [result],
+        config,
+    )
+
+    assert not sent_any
+    assert sent == []
 
 
 def test_legacy_state_without_signal_hash_does_not_crash(monkeypatch):

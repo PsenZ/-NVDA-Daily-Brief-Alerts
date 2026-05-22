@@ -183,6 +183,8 @@ class AppConfig:
     max_approved_actions_risk_on: int = 3
     max_approved_actions_neutral: int = 2
     max_approved_actions_risk_off: int = 0
+    price_cache_actionable_max_age_hours: float = 24.0
+    price_cache_invalid_max_age_hours: float = 72.0
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -252,4 +254,10 @@ class AppConfig:
             max_approved_actions_risk_on=_int_env("MAX_APPROVED_ACTIONS_RISK_ON", 3),
             max_approved_actions_neutral=_int_env("MAX_APPROVED_ACTIONS_NEUTRAL", 2),
             max_approved_actions_risk_off=_int_env("MAX_APPROVED_ACTIONS_RISK_OFF", 0),
+            price_cache_actionable_max_age_hours=_float_env(
+                "PRICE_CACHE_ACTIONABLE_MAX_AGE_HOURS", 24.0
+            ),
+            price_cache_invalid_max_age_hours=_float_env(
+                "PRICE_CACHE_INVALID_MAX_AGE_HOURS", 72.0
+            ),
         )

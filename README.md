@@ -32,6 +32,8 @@ VeyraQuant 是一个面向美股小型股票池的半自动波段交易研究助
 - 通过邮件发送每日晨会简报，也可发送机会提醒和风险提醒。
 - Keeps a decision log and can summarize which setups have recently worked.
 - 保存决策日志，并可复盘哪些 setup 最近表现更好。
+- Applies a data quality gate so stale daily price cache cannot generate actionable buy/add plans.
+- 使用数据质量门禁，旧的日线缓存不能生成可执行买入/加仓计划。
 
 ## Strategy Logic / 策略逻辑
 
@@ -121,6 +123,37 @@ MAX_APPROVED_ACTIONS_RISK_OFF=0
 This prevents the daily brief from presenting several correlated trades as if they were independent opportunities.
 
 这可以避免日报把多个高度相关的交易机会误展示成彼此独立的机会。
+
+## Data Quality Gate / 数据质量门禁
+
+Each symbol carries `DataQuality` metadata:
+
+每个标的都会携带 `DataQuality` 元数据：
+
+- `price_freshness`
+- `intraday_freshness`
+- `fundamentals_freshness`
+- `options_available`
+- `news_available`
+- `cache_age_hours`
+- `data_quality_level`: `HIGH`, `MEDIUM`, or `LOW`
+
+Daily price data is the hard gate. If live data is unavailable and the daily cache is stale, the system will downgrade actionable signals to `WAIT` rather than allowing `BUY_TRIGGER` or `ADD_TRIGGER`.
+
+日线价格数据是硬门禁。如果实时数据不可用且日线缓存过旧，系统会把可执行信号降级为 `WAIT`，而不是允许 `BUY_TRIGGER` 或 `ADD_TRIGGER`。
+
+Intraday data is softer. If intraday data is missing, the symbol can still appear in the daily report, but entry alerts are disabled for that result.
+
+盘中数据是软门禁。如果盘中数据缺失，标的仍可出现在日报中，但不会触发入场提醒。
+
+Default freshness controls:
+
+默认新鲜度控制：
+
+```text
+PRICE_CACHE_ACTIONABLE_MAX_AGE_HOURS=24
+PRICE_CACHE_INVALID_MAX_AGE_HOURS=72
+```
 
 ## Position Context / 持仓上下文
 
@@ -274,6 +307,8 @@ SECTOR_POSITION_LIMITS_JSON={"semiconductor":20,"mega_growth":25,"auto_growth":1
 MAX_APPROVED_ACTIONS_RISK_ON=3
 MAX_APPROVED_ACTIONS_NEUTRAL=2
 MAX_APPROVED_ACTIONS_RISK_OFF=0
+PRICE_CACHE_ACTIONABLE_MAX_AGE_HOURS=24
+PRICE_CACHE_INVALID_MAX_AGE_HOURS=72
 ```
 
 Context and memory:
@@ -396,4 +431,3 @@ workflow 会校验这个 Secret 是否为合法 JSON，在运行时临时写入�
 This is a rules-based research assistant, not a statistically validated alpha model. Reports, alerts, backtests, and decision-review outputs are diagnostic tools and should not be treated as proof of future performance.
 
 本项目是规则型研究助手，不是经过统计验证的 alpha 模型。日报、提醒、回测和决策复盘都属于诊断工具，不应被视为未来收益的证明。
-
