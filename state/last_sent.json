@@ -130,12 +130,12 @@
           "max_loss_pct": 0.5,
           "position_pct": 8.17,
           "stop": "$567.47",
-          "targets": "$659.92 / $696.90"
+          "targets": "$659.93 / $696.91"
         },
         "reason": "signal_changed",
-        "score": 94,
-        "sent_at": "2026-05-27T07:01:33.941627+10:00",
-        "signal_hash": "e3c93de1dcf2"
+        "score": 100,
+        "sent_at": "2026-05-27T14:51:21.533601+10:00",
+        "signal_hash": "d8d6cb63a15e"
       }
     },
     "TSLA": {
