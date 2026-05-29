@@ -7,13 +7,13 @@
           "entry_zone": "$312.51 - $313.90",
           "max_loss_pct": 0.36,
           "position_pct": 10.0,
-          "stop": "$302.07",
-          "targets": "$329.91 / $341.05"
+          "stop": "$302.06",
+          "targets": "$329.92 / $341.06"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-05-29T06:13:55.972167+10:00",
-        "signal_hash": "5f328fe17f2f"
+        "sent_at": "2026-05-29T16:52:01.702384+10:00",
+        "signal_hash": "61008542fa9a"
       },
       "pullback_add": {
         "channel": "entry",
