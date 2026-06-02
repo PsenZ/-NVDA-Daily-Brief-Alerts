@@ -126,16 +126,16 @@
       "breakout_entry": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$602.14 - $606.76",
+          "entry_zone": "$632.21 - $637.02",
           "max_loss_pct": 0.5,
-          "position_pct": 8.17,
-          "stop": "$567.47",
-          "targets": "$659.93 / $696.91"
+          "position_pct": 8.25,
+          "stop": "$596.14",
+          "targets": "$692.33 / $730.80"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-05-27T14:51:21.533601+10:00",
-        "signal_hash": "d8d6cb63a15e"
+        "sent_at": "2026-06-03T06:22:18.401799+10:00",
+        "signal_hash": "9bfdfc0c4480"
       }
     },
     "TSLA": {
