@@ -136,6 +136,20 @@
         "score": 100,
         "sent_at": "2026-06-03T20:12:41.770167+10:00",
         "signal_hash": "9bfdfc0c4480"
+      },
+      "pullback_add": {
+        "channel": "entry",
+        "plan": {
+          "entry_zone": "$581.50 - $593.14",
+          "max_loss_pct": 0.5,
+          "position_pct": 6.31,
+          "stop": "$540.76",
+          "targets": "$657.15 / $703.71"
+        },
+        "reason": "new_alert",
+        "score": 100,
+        "sent_at": "2026-06-10T00:02:01.707284+10:00",
+        "signal_hash": "ea795f995ab2"
       }
     },
     "TSLA": {
