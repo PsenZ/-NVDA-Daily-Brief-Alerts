@@ -40,9 +40,9 @@
           "stop": "$427.84",
           "targets": "$589.47 / $654.13"
         },
-        "reason": "signal_changed",
+        "reason": "cooldown_elapsed",
         "score": 100,
-        "sent_at": "2026-06-12T07:16:19.675783+10:00",
+        "sent_at": "2026-06-12T22:33:47.767927+10:00",
         "signal_hash": "df8a9f5cbbea"
       }
     },
@@ -70,9 +70,9 @@
           "stop": "$854.70",
           "targets": "$1231.16 / $1381.74"
         },
-        "reason": "signal_changed",
+        "reason": "cooldown_elapsed",
         "score": 100,
-        "sent_at": "2026-06-12T07:16:19.675783+10:00",
+        "sent_at": "2026-06-12T22:33:47.767927+10:00",
         "signal_hash": "796e1cc5a376"
       }
     },
