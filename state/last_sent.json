@@ -132,9 +132,9 @@
           "stop": "$595.64",
           "targets": "$732.86 / $787.75"
         },
-        "reason": "signal_changed",
+        "reason": "cooldown_elapsed",
         "score": 100,
-        "sent_at": "2026-06-16T07:35:12.440462+10:00",
+        "sent_at": "2026-06-16T22:49:22.653653+10:00",
         "signal_hash": "b6d82c6e261a"
       },
       "pullback_add": {
