@@ -124,32 +124,32 @@
       "breakout_entry": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$717.12 - $720.94",
-          "max_loss_pct": 0.42,
+          "entry_zone": "$740.62 - $744.57",
+          "max_loss_pct": 0.43,
           "position_pct": 10.0,
-          "stop": "$688.48",
-          "targets": "$764.86 / $795.41"
+          "stop": "$710.96",
+          "targets": "$790.06 / $821.70"
         },
         "reason": "signal_changed",
-        "score": 89,
-        "sent_at": "2026-06-12T15:18:42.273691+10:00",
-        "signal_hash": "79f882eddadc"
+        "score": 99,
+        "sent_at": "2026-06-19T07:30:08.357129+10:00",
+        "signal_hash": "790fb0c80dbf"
       }
     },
     "SMH": {
       "breakout_entry": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$647.10 - $653.96",
+          "entry_zone": "$659.88 - $667.04",
           "max_loss_pct": 0.5,
-          "position_pct": 5.93,
-          "stop": "$595.64",
-          "targets": "$732.86 / $787.75"
+          "position_pct": 5.79,
+          "stop": "$606.20",
+          "targets": "$749.35 / $806.62"
         },
-        "reason": "cooldown_elapsed",
+        "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-06-16T22:49:22.653653+10:00",
-        "signal_hash": "b6d82c6e261a"
+        "sent_at": "2026-06-19T07:30:08.357129+10:00",
+        "signal_hash": "6e74ea7cdfd2"
       },
       "pullback_add": {
         "channel": "entry",
@@ -198,8 +198,8 @@
     }
   },
   "daily": {
-    "date": "2026-06-18",
-    "sent_at": "2026-06-18T08:23:43.375261+10:00"
+    "date": "2026-06-19",
+    "sent_at": "2026-06-19T07:30:08.357129+10:00"
   },
   "version": 2
 }
