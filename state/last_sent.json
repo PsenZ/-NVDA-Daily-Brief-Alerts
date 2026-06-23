@@ -48,16 +48,16 @@
       "pullback_add": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$501.62 - $518.32",
+          "entry_zone": "$501.21 - $517.92",
           "max_loss_pct": 0.5,
-          "position_pct": 3.82,
-          "stop": "$443.14",
-          "targets": "$610.22 / $677.05"
+          "position_pct": 3.81,
+          "stop": "$442.73",
+          "targets": "$609.82 / $676.65"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-06-24T02:12:29.097623+10:00",
-        "signal_hash": "0e1c27b31b37"
+        "sent_at": "2026-06-24T04:16:04.186481+10:00",
+        "signal_hash": "78d7508a39fc"
       }
     },
     "MSFT": {
