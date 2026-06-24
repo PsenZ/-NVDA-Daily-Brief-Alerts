@@ -48,16 +48,16 @@
       "pullback_add": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$502.26 - $518.32",
+          "entry_zone": "$501.87 - $517.92",
           "max_loss_pct": 0.5,
           "position_pct": 3.97,
-          "stop": "$446.07",
-          "targets": "$606.62 / $670.84"
+          "stop": "$445.68",
+          "targets": "$606.23 / $670.45"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-06-25T01:10:07.340028+10:00",
-        "signal_hash": "2c3e817e23b8"
+        "sent_at": "2026-06-25T03:20:56.593161+10:00",
+        "signal_hash": "ad570e628b1c"
       }
     },
     "MSFT": {
@@ -92,16 +92,16 @@
       "pullback_add": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$989.47 - $1031.48",
+          "entry_zone": "$988.31 - $1030.65",
           "max_loss_pct": 0.5,
-          "position_pct": 3.01,
-          "stop": "$842.45",
-          "targets": "$1262.51 / $1430.54"
+          "position_pct": 2.98,
+          "stop": "$840.11",
+          "targets": "$1263.53 / $1432.89"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-06-25T01:10:07.340028+10:00",
-        "signal_hash": "8846c8277eba"
+        "sent_at": "2026-06-25T03:20:56.593161+10:00",
+        "signal_hash": "a2cdb8a054ba"
       }
     },
     "NVDA": {
