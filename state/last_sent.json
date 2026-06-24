@@ -48,16 +48,16 @@
       "pullback_add": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$501.21 - $517.92",
+          "entry_zone": "$502.26 - $518.32",
           "max_loss_pct": 0.5,
-          "position_pct": 3.81,
-          "stop": "$442.73",
-          "targets": "$609.82 / $676.65"
+          "position_pct": 3.97,
+          "stop": "$446.07",
+          "targets": "$606.62 / $670.84"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-06-24T04:16:04.186481+10:00",
-        "signal_hash": "78d7508a39fc"
+        "sent_at": "2026-06-25T01:10:07.340028+10:00",
+        "signal_hash": "2c3e817e23b8"
       }
     },
     "MSFT": {
@@ -92,16 +92,16 @@
       "pullback_add": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$983.99 - $1026.63",
+          "entry_zone": "$989.47 - $1031.48",
           "max_loss_pct": 0.5,
-          "position_pct": 2.95,
-          "stop": "$834.76",
-          "targets": "$1261.13 / $1431.68"
+          "position_pct": 3.01,
+          "stop": "$842.45",
+          "targets": "$1262.51 / $1430.54"
         },
-        "reason": "new_alert",
+        "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-06-24T02:12:29.097623+10:00",
-        "signal_hash": "dfd08c4d6db3"
+        "sent_at": "2026-06-25T01:10:07.340028+10:00",
+        "signal_hash": "8846c8277eba"
       }
     },
     "NVDA": {
@@ -168,16 +168,16 @@
       "pullback_add": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$596.32 - $609.99",
+          "entry_zone": "$608.90 - $622.89",
           "max_loss_pct": 0.5,
-          "position_pct": 5.51,
-          "stop": "$548.45",
-          "targets": "$685.20 / $739.90"
+          "position_pct": 5.5,
+          "stop": "$559.94",
+          "targets": "$699.83 / $755.79"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-06-18T04:03:53.836895+10:00",
-        "signal_hash": "9a0386fc6ff8"
+        "sent_at": "2026-06-25T01:10:07.340028+10:00",
+        "signal_hash": "af62c1c2b7f0"
       }
     },
     "TSLA": {
