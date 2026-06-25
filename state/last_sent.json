@@ -48,16 +48,16 @@
       "pullback_add": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$501.87 - $517.92",
+          "entry_zone": "$503.22 - $519.91",
           "max_loss_pct": 0.5,
-          "position_pct": 3.97,
-          "stop": "$445.68",
-          "targets": "$606.23 / $670.45"
+          "position_pct": 3.83,
+          "stop": "$444.82",
+          "targets": "$611.68 / $678.42"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-06-25T03:20:56.593161+10:00",
-        "signal_hash": "ad570e628b1c"
+        "sent_at": "2026-06-26T01:31:12.490469+10:00",
+        "signal_hash": "f3f81a55d05f"
       }
     },
     "MSFT": {
@@ -168,16 +168,16 @@
       "pullback_add": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$608.90 - $622.89",
+          "entry_zone": "$610.22 - $624.71",
           "max_loss_pct": 0.5,
-          "position_pct": 5.5,
-          "stop": "$559.94",
-          "targets": "$699.83 / $755.79"
+          "position_pct": 5.32,
+          "stop": "$559.48",
+          "targets": "$704.43 / $762.41"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-06-25T01:10:07.340028+10:00",
-        "signal_hash": "af62c1c2b7f0"
+        "sent_at": "2026-06-26T01:31:12.490469+10:00",
+        "signal_hash": "4ee8ebe01b96"
       }
     },
     "TSLA": {
