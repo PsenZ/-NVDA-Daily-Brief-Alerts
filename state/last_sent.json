@@ -92,16 +92,16 @@
       "pullback_add": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$1011.93 - $1059.32",
+          "entry_zone": "$1019.02 - $1067.10",
           "max_loss_pct": 0.5,
-          "position_pct": 2.73,
-          "stop": "$846.06",
-          "targets": "$1319.98 / $1509.55"
+          "position_pct": 2.71,
+          "stop": "$850.77",
+          "targets": "$1331.49 / $1523.77"
         },
         "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-06-26T23:34:36.911650+10:00",
-        "signal_hash": "fb8db8491b24"
+        "sent_at": "2026-06-30T03:12:43.824131+10:00",
+        "signal_hash": "04566fc96847"
       }
     },
     "NVDA": {
