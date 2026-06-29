@@ -138,16 +138,16 @@
       "breakout_entry": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$740.62 - $744.58",
-          "max_loss_pct": 0.43,
+          "entry_zone": "$724.08 - $728.22",
+          "max_loss_pct": 0.46,
           "position_pct": 10.0,
-          "stop": "$710.95",
-          "targets": "$790.06 / $821.71"
+          "stop": "$693.05",
+          "targets": "$775.79 / $808.88"
         },
-        "reason": "cooldown_elapsed",
+        "reason": "signal_changed",
         "score": 100,
-        "sent_at": "2026-06-22T17:20:20.315399+10:00",
-        "signal_hash": "f898c4ca7faa"
+        "sent_at": "2026-06-30T07:01:16.890641+10:00",
+        "signal_hash": "9dc9fb10215c"
       }
     },
     "SMH": {
@@ -212,8 +212,8 @@
     }
   },
   "daily": {
-    "date": "2026-06-29",
-    "sent_at": "2026-06-29T07:31:05.536280+10:00"
+    "date": "2026-06-30",
+    "sent_at": "2026-06-30T07:01:16.890641+10:00"
   },
   "version": 2
 }
