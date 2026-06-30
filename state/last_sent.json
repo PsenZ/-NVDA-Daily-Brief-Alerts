@@ -145,9 +145,9 @@
           "targets": "$775.79 / $808.88"
         },
         "reason": "signal_changed",
-        "score": 100,
-        "sent_at": "2026-06-30T07:01:16.890641+10:00",
-        "signal_hash": "9dc9fb10215c"
+        "score": 86,
+        "sent_at": "2026-06-30T11:35:29.232797+10:00",
+        "signal_hash": "c1b24fc6c671"
       }
     },
     "SMH": {
