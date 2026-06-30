@@ -11,9 +11,9 @@
           "targets": "$315.16 / $331.68"
         },
         "reason": "signal_changed",
-        "score": 88,
-        "sent_at": "2026-07-01T08:02:11.990438+10:00",
-        "signal_hash": "5c9fe4b08b99"
+        "score": 80,
+        "sent_at": "2026-07-01T09:38:39.071156+10:00",
+        "signal_hash": "bf7dea5ef5ef"
       },
       "pullback_add": {
         "channel": "entry",
@@ -161,9 +161,9 @@
           "targets": "$747.67 / $806.41"
         },
         "reason": "signal_changed",
-        "score": 100,
-        "sent_at": "2026-07-01T08:02:11.990438+10:00",
-        "signal_hash": "966b438ac31c"
+        "score": 98,
+        "sent_at": "2026-07-01T09:38:39.071156+10:00",
+        "signal_hash": "f4029273da3a"
       },
       "pullback_add": {
         "channel": "entry",
