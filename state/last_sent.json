@@ -11,9 +11,9 @@
           "targets": "$335.93 / $353.40"
         },
         "reason": "signal_changed",
-        "score": 99,
-        "sent_at": "2026-07-03T06:16:24.954576+10:00",
-        "signal_hash": "d00426db6ef8"
+        "score": 100,
+        "sent_at": "2026-07-03T07:35:55.423494+10:00",
+        "signal_hash": "0fa6be2dc469"
       },
       "pullback_add": {
         "channel": "entry",
@@ -212,8 +212,8 @@
     }
   },
   "daily": {
-    "date": "2026-07-02",
-    "sent_at": "2026-07-02T07:52:19.215766+10:00"
+    "date": "2026-07-03",
+    "sent_at": "2026-07-03T07:35:55.423494+10:00"
   },
   "version": 2
 }
