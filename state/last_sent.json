@@ -4,16 +4,16 @@
       "breakout_entry": {
         "channel": "entry",
         "plan": {
-          "entry_zone": "$289.36 - $291.42",
+          "entry_zone": "$308.63 - $310.81",
           "max_loss_pct": 0.5,
-          "position_pct": 8.79,
-          "stop": "$273.87",
-          "targets": "$315.17 / $331.69"
+          "position_pct": 8.86,
+          "stop": "$292.25",
+          "targets": "$335.93 / $353.40"
         },
         "reason": "signal_changed",
-        "score": 83,
-        "sent_at": "2026-07-01T16:22:41.177535+10:00",
-        "signal_hash": "087cccff8eb9"
+        "score": 99,
+        "sent_at": "2026-07-03T06:16:24.954576+10:00",
+        "signal_hash": "d00426db6ef8"
       },
       "pullback_add": {
         "channel": "entry",
