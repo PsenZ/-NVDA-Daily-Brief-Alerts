@@ -148,6 +148,20 @@
         "score": 100,
         "sent_at": "2026-07-01T16:22:41.177535+10:00",
         "signal_hash": "4b625b8ce90f"
+      },
+      "pullback_add": {
+        "channel": "entry",
+        "plan": {
+          "entry_zone": "$715.88 - $724.04",
+          "max_loss_pct": 0.45,
+          "position_pct": 10.0,
+          "stop": "$687.32",
+          "targets": "$768.92 / $801.56"
+        },
+        "reason": "new_alert",
+        "score": 100,
+        "sent_at": "2026-07-07T02:16:28.202011+10:00",
+        "signal_hash": "28a5cce33478"
       }
     },
     "SMH": {
