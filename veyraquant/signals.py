@@ -83,7 +83,14 @@ def analyze_symbol(
     tech = tech_summary(daily)
     intraday_data = intraday_snapshot(intraday)
     contributions, reasons, risks = score_components(
-        symbol, tech, fundamentals, options, news, market, config.social_sentiment_threshold
+        symbol,
+        tech,
+        fundamentals,
+        options,
+        news,
+        market,
+        config.social_sentiment_threshold,
+        getattr(config, "strategy", None),
     )
     raw_score = sum(contributions.values())
     score = int(max(0, min(100, round(raw_score))))
