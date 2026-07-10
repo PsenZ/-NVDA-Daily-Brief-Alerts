@@ -111,6 +111,18 @@ class StrategyConfig:
     hold_watch_score_min: int = 55
     risk_reduce_score_max: int = 40
     risk_reduce_rsi_overheat: float = 74.0
+    # Scoring judgment thresholds (score_components). Weights stay in code for now.
+    score_base: float = 35.0
+    score_rsi_healthy_min: float = 45.0
+    score_rsi_healthy_max: float = 68.0
+    score_rsi_overheat: float = 72.0
+    score_rsi_weak: float = 40.0
+    score_adx_trend_min: float = 25.0
+    score_vol_ratio_5_strong: float = 2.0
+    score_vol_ratio_strong: float = 1.5
+    score_vol_ratio_moderate: float = 1.1
+    score_vol_ratio_light: float = 0.7
+    score_dist_ma5_extended_pct: float = 5.0
 
 
 def _load_strategy_config(path: str) -> StrategyConfig:

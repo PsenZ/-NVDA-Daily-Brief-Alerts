@@ -3,6 +3,7 @@ from typing import Optional
 
 import numpy as np
 
+from .config import StrategyConfig
 from .constants import MARKET_RISK_OFF, MARKET_RISK_ON
 from .models import FundamentalsData, MarketContext, NewsBundle, OptionsData, TechSnapshot
 
@@ -15,7 +16,9 @@ def score_components(
     news: NewsBundle,
     market: MarketContext,
     social_sentiment_threshold: float = 0.15,
+    strategy: Optional[StrategyConfig] = None,
 ) -> tuple[dict[str, float], list[str], list[str]]:
+    s = strategy or StrategyConfig()
     t = tech.values
     contributions: dict[str, float] = {}
     reasons: list[str] = []
@@ -51,16 +54,16 @@ def score_components(
     else:
         momentum -= 6
         risks.append("MACD has rolled under the signal line and momentum is softer.")
-    if 45 <= t["rsi14"] <= 68:
+    if s.score_rsi_healthy_min <= t["rsi14"] <= s.score_rsi_healthy_max:
         momentum += 10
         reasons.append("RSI remains in a healthy range without obvious overheating.")
-    elif t["rsi14"] > 72:
+    elif t["rsi14"] > s.score_rsi_overheat:
         momentum -= 7
         risks.append("RSI is stretched and the reward for chasing is worse.")
-    elif t["rsi14"] < 40:
+    elif t["rsi14"] < s.score_rsi_weak:
         momentum -= 10
         risks.append("RSI is weak, showing limited demand support.")
-    if t["adx14"] >= 25 and t["plus_di"] > t["minus_di"]:
+    if t["adx14"] >= s.score_adx_trend_min and t["plus_di"] > t["minus_di"]:
         momentum += 10
         reasons.append("ADX is above 25 with +DI leading, which supports trend persistence.")
     contributions["momentum"] = momentum
@@ -80,19 +83,19 @@ def score_components(
     contributions["relative_strength"] = relative
 
     volume = 0.0
-    if t["vol_ratio_5"] >= 2.0:
+    if t["vol_ratio_5"] >= s.score_vol_ratio_5_strong:
         volume += 12
         reasons.append("Volume is running above twice the 5-day average, which improves breakout confirmation.")
-    elif t["vol_ratio"] >= 1.5:
+    elif t["vol_ratio"] >= s.score_vol_ratio_strong:
         volume += 10
         reasons.append("Volume is clearly above the 20-day average, supporting signal confirmation.")
-    elif t["vol_ratio"] >= 1.1:
+    elif t["vol_ratio"] >= s.score_vol_ratio_moderate:
         volume += 5
         reasons.append("Volume is modestly above average.")
-    elif t["vol_ratio_5"] < 0.7:
+    elif t["vol_ratio_5"] < s.score_vol_ratio_light:
         volume += 4
         reasons.append("The pullback is happening on lighter 5-day volume, which fits a constructive retracement.")
-    elif t["vol_ratio"] < 0.7:
+    elif t["vol_ratio"] < s.score_vol_ratio_light:
         volume -= 4
         risks.append("Volume is below average and the breakout confirmation is weak.")
     contributions["volume"] = volume
@@ -129,7 +132,7 @@ def score_components(
     contributions["news_sentiment"] = sentiment
 
     discipline = 0.0
-    if t["dist_ma5_pct"] > 5:
+    if t["dist_ma5_pct"] > s.score_dist_ma5_extended_pct:
         discipline -= 8
         risks.append("Price is too extended above MA5 and chasing becomes harder to justify.")
     elif 0 <= t["dist_ma5_pct"] <= 2:
@@ -170,7 +173,7 @@ def score_components(
     elif market.label == MARKET_RISK_OFF:
         risks.append("The market filter is in risk-off mode and reduces aggressive execution.")
 
-    contributions["base"] = 35.0
+    contributions["base"] = s.score_base
     return contributions, reasons, risks
 
 

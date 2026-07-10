@@ -14,5 +14,16 @@
   "pullback_rsi_max": 62.0,
   "hold_watch_score_min": 55,
   "risk_reduce_score_max": 40,
-  "risk_reduce_rsi_overheat": 74.0
+  "risk_reduce_rsi_overheat": 74.0,
+  "score_base": 35.0,
+  "score_rsi_healthy_min": 45.0,
+  "score_rsi_healthy_max": 68.0,
+  "score_rsi_overheat": 72.0,
+  "score_rsi_weak": 40.0,
+  "score_adx_trend_min": 25.0,
+  "score_vol_ratio_5_strong": 2.0,
+  "score_vol_ratio_strong": 1.5,
+  "score_vol_ratio_moderate": 1.1,
+  "score_vol_ratio_light": 0.7,
+  "score_dist_ma5_extended_pct": 5.0
 }
