@@ -170,21 +170,23 @@ def compose_alert_email(result: SignalResult, now_dt: datetime) -> tuple[str, st
     return subject, "\n".join(lines)
 
 
-# Email-safe palette (inline styles only; email clients strip <style>).
-_HTML_BG = "#0f172a"
-_HTML_CARD = "#1f2937"
-_HTML_TEXT = "#e5e7eb"
-_HTML_MUTED = "#9aa5b8"
-_HTML_HEAD = "#f8fafc"
-_HTML_ACCENT = "#93c5fd"
-_HTML_ROW_ALT = "#243244"
-_HTML_BORDER = "#334155"
+# Email-safe light palette (inline styles only; email clients strip <style>
+# and often ignore @media, so a single client-robust light scheme is used
+# rather than an unreliable dark/light toggle).
+_HTML_BG = "#f4f6f9"
+_HTML_CARD = "#ffffff"
+_HTML_TEXT = "#1a1f2b"
+_HTML_MUTED = "#5b6472"
+_HTML_HEAD = "#0f1826"
+_HTML_ACCENT = "#3459c4"
+_HTML_ROW_ALT = "#f1f4f8"
+_HTML_BORDER = "#dfe4ec"
 _SECTION_ACCENT = {
-    "Top Actions": "#22c55e",
-    "Deferred Ideas": "#38bdf8",
-    "Watch / Wait": "#a3e635",
-    "Risk Actions": "#f97316",
-    "Rejected Plans": "#ef4444",
+    "Top Actions": "#15a34a",
+    "Deferred Ideas": "#2563c9",
+    "Watch / Wait": "#4d8a12",
+    "Risk Actions": "#d9700a",
+    "Rejected Plans": "#d13d33",
 }
 
 
@@ -249,7 +251,7 @@ def compose_daily_report_html(
 
 def compose_alert_email_html(result: SignalResult, now_dt: datetime) -> str:
     is_risk = result.action == "RISK_REDUCE"
-    border = "#f97316" if is_risk else "#22c55e"
+    border = _SECTION_ACCENT["Risk Actions"] if is_risk else _SECTION_ACCENT["Top Actions"]
     dual_time = format_dual_time(now_dt)
     kind = "Risk Alert" if is_risk else "Trade Alert"
     title = f"{result.symbol} {kind}"
@@ -331,10 +333,10 @@ def _html_summary_card(market, approved, deferred, watchlist, rejected, results)
             f"font-variant-numeric:tabular-nums;\">{n}</span> "
             f"<span style=\"color:{_HTML_MUTED};\">{label}</span></td>"
             for n, label, color in (
-                (len(approved), "approved", "#22c55e"),
-                (len(deferred), "deferred", "#38bdf8"),
-                (len(watchlist), "watch", "#a3e635"),
-                (len(rejected), "rejected", "#ef4444"),
+                (len(approved), "approved", _SECTION_ACCENT["Top Actions"]),
+                (len(deferred), "deferred", _SECTION_ACCENT["Deferred Ideas"]),
+                (len(watchlist), "watch", _SECTION_ACCENT["Watch / Wait"]),
+                (len(rejected), "rejected", _SECTION_ACCENT["Rejected Plans"]),
             )
         )
         + "</tr></table>"
