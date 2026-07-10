@@ -185,6 +185,7 @@ class AppConfig:
     max_approved_actions_risk_off: int = 0
     price_cache_actionable_max_age_hours: float = 24.0
     price_cache_invalid_max_age_hours: float = 72.0
+    data_workers: int = 4
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -260,4 +261,5 @@ class AppConfig:
             price_cache_invalid_max_age_hours=_float_env(
                 "PRICE_CACHE_INVALID_MAX_AGE_HOURS", 72.0
             ),
+            data_workers=_int_env("DATA_WORKERS", 4),
         )

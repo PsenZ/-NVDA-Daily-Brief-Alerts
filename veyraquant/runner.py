@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from .config import AppConfig
 from .data import DataClient
@@ -7,7 +8,7 @@ from .emailer import send_email
 from .market import build_market_context
 from .memory import sync_decision_log
 from .memory_review import brief_review_notes
-from .models import SymbolData
+from .models import DataQuality, FundamentalsData, NewsBundle, SymbolData
 from .positions import apply_position_context, load_positions
 from .reporting import (
     compose_alert_email,
@@ -51,9 +52,9 @@ def run(config: AppConfig | None = None) -> int:
 
     client = DataClient(config)
     positions = load_positions(config.positions_path)
-    market_histories = {symbol: client.fetch_market_daily(symbol) for symbol in config.market_symbols}
+    market_histories = _fetch_market_histories(client, config)
     market = build_market_context(market_histories)
-    symbol_data_items = [client.fetch_symbol(symbol) for symbol in config.symbols]
+    symbol_data_items = _fetch_symbol_data(client, config)
     results, portfolio_notes = build_results(symbol_data_items, market, config, positions)
     review_notes = brief_review_notes(config.memory_log_path)
 
@@ -80,6 +81,58 @@ def run(config: AppConfig | None = None) -> int:
     else:
         logger.info("Nothing sent; state unchanged.")
     return 0
+
+
+def _data_workers(config: AppConfig, item_count: int) -> int:
+    requested = getattr(config, "data_workers", 4)
+    try:
+        requested = int(requested)
+    except Exception:
+        requested = 4
+    return max(1, min(requested, max(1, item_count)))
+
+
+def _fetch_market_histories(client: DataClient, config: AppConfig) -> dict:
+    symbols = list(config.market_symbols)
+    if not symbols:
+        return {}
+    workers = _data_workers(config, len(symbols))
+    if workers == 1:
+        histories = [client.fetch_market_daily(symbol) for symbol in symbols]
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            histories = list(pool.map(client.fetch_market_daily, symbols))
+    return dict(zip(symbols, histories))
+
+
+def _fetch_symbol_data(client: DataClient, config: AppConfig) -> list[SymbolData]:
+    symbols = list(config.symbols)
+    if not symbols:
+        return []
+
+    def fetch(symbol: str) -> SymbolData:
+        try:
+            return client.fetch_symbol(symbol)
+        except Exception:
+            logger.warning("%s symbol fetch failed; skipping with empty data.", symbol, exc_info=True)
+            quality = DataQuality(data_quality_level="LOW", actionable_allowed=False)
+            quality.reasons.append("symbol data fetch raised an unexpected error")
+            return SymbolData(
+                symbol=symbol,
+                daily=None,
+                intraday=None,
+                fundamentals=FundamentalsData(),
+                options=None,
+                news=NewsBundle([], [], {"score": 0.0, "label": "中性", "sample_size": 0}),
+                warnings=[f"{symbol} data fetch failed unexpectedly."],
+                data_quality=quality,
+            )
+
+    workers = _data_workers(config, len(symbols))
+    if workers == 1:
+        return [fetch(symbol) for symbol in symbols]
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(fetch, symbols))
 
 
 def build_results(symbol_data_items: list[SymbolData], market, config: AppConfig, positions=None):
