@@ -1,4 +1,5 @@
 ﻿import json
+import logging
 import math
 import os
 import re
@@ -12,6 +13,9 @@ import pandas as pd
 
 from .config import AppConfig
 from .models import DataQuality, FundamentalsData, NewsBundle, OptionsData, SymbolData
+
+
+logger = logging.getLogger(__name__)
 
 
 POSITIVE_WORDS = {
@@ -143,6 +147,7 @@ class DataClient:
                 if quality is not None:
                     quality.fundamentals_freshness = "live"
             except Exception as exc:
+                logger.warning("%s fundamentals fetch failed; trying cache.", symbol, exc_info=True)
                 warnings.append(f"{symbol} 基本面实时数据不可用，尝试使用缓存: {exc}")
                 info = self._read_json(cache_path) or {}
                 if quality is not None:
@@ -178,6 +183,7 @@ class DataClient:
             exp = exps[0]
             chain = ticker.option_chain(exp)
         except Exception as exc:
+            logger.warning("%s options chain unavailable.", symbol, exc_info=True)
             warnings.append(f"{symbol} 期权链不可用: {exc}")
             return None
 
@@ -257,6 +263,7 @@ class DataClient:
 
             return yf.Ticker(symbol)
         except Exception as exc:
+            logger.warning("%s yfinance unavailable.", symbol, exc_info=True)
             warnings.append(f"{symbol} yfinance 不可用: {exc}")
             return None
 
@@ -281,6 +288,7 @@ class DataClient:
                     return data
                 warnings.append(f"{symbol} {name} 行情为空，尝试使用缓存")
             except Exception as exc:
+                logger.warning("%s %s history fetch failed; trying cache.", symbol, name, exc_info=True)
                 warnings.append(f"{symbol} {name} 行情不可用，尝试使用缓存: {exc}")
 
         cached = self._read_price_cache(cache_path)
@@ -401,6 +409,7 @@ class DataClient:
 
             feed = feedparser.parse(url)
         except Exception as exc:
+            logger.warning("RSS fetch failed: %s", url, exc_info=True)
             warnings.append(f"RSS 读取失败: {exc}")
             return []
         entries = []

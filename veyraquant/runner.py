@@ -1,3 +1,5 @@
+import logging
+
 from .config import AppConfig
 from .data import DataClient
 from .decision_manager import apply_portfolio_manager
@@ -25,6 +27,9 @@ from .state import (
 from .timeutils import US_EASTERN_TZ, daily_report_due, is_us_market_weekday, now_sydney
 
 
+logger = logging.getLogger(__name__)
+
+
 def run(config: AppConfig | None = None) -> int:
     config = config or AppConfig.from_env()
     now_dt = now_sydney()
@@ -39,9 +44,9 @@ def run(config: AppConfig | None = None) -> int:
         and is_us_market_weekday(now_dt_et)
     )
     if not daily_due and not alerts_due:
-        print("Daily report skipped: before send threshold or already sent today.")
-        print("Entry and risk alerts skipped: disabled or US market weekend.")
-        print("Nothing sent; state unchanged.")
+        logger.info("Daily report skipped: before send threshold or already sent today.")
+        logger.info("Entry and risk alerts skipped: disabled or US market weekend.")
+        logger.info("Nothing sent; state unchanged.")
         return 0
 
     client = DataClient(config)
@@ -67,13 +72,13 @@ def run(config: AppConfig | None = None) -> int:
 
     if changed and not config.dry_run:
         write_state(config.state_path, state)
-        print("State updated.")
+        logger.info("State updated.")
     elif config.dry_run:
-        print("DRY_RUN enabled; state unchanged.")
+        logger.info("DRY_RUN enabled; state unchanged.")
     elif sent_any:
-        print("Send completed; state unchanged.")
+        logger.info("Send completed; state unchanged.")
     else:
-        print("Nothing sent; state unchanged.")
+        logger.info("Nothing sent; state unchanged.")
     return 0
 
 
@@ -111,16 +116,17 @@ def maybe_send_daily_report(
     if not config.force_daily_report and not daily_report_due(
         now_dt, config.send_hour, config.send_minute, config.send_window_minutes
     ):
-        print("Daily report skipped: before send threshold.")
+        logger.info("Daily report skipped: before send threshold.")
         return False, False
     if not config.force_daily_report and already_sent_daily(state, now_dt):
-        print("Daily report skipped: already sent today.")
+        logger.info("Daily report skipped: already sent today.")
         return False, False
 
     subject, body = compose_daily_report(results, market, config, now_dt, portfolio_notes, review_notes)
     try:
         html_body = compose_daily_report_html(results, market, config, now_dt, portfolio_notes, review_notes)
     except Exception:
+        logger.warning("HTML daily report render failed; falling back to plain text.", exc_info=True)
         html_body = None
     if config.dry_run:
         print(subject)
@@ -135,21 +141,21 @@ def maybe_send_daily_report(
         config.decision_memory_holding_days,
     )
     if config.force_daily_report:
-        print("Daily report force-sent without updating daily state.")
+        logger.info("Daily report force-sent without updating daily state.")
         return True, False
 
     mark_daily_sent(state, now_dt)
-    print("Daily report sent.")
+    logger.info("Daily report sent.")
     return True, True
 
 
 def maybe_send_entry_alerts(state, now_dt, results, config: AppConfig) -> bool:
     if not config.entry_alerts_enabled and not getattr(config, "risk_alerts_enabled", False):
-        print("Entry and risk alerts disabled.")
+        logger.info("Entry and risk alerts disabled.")
         return False
     now_dt_et = now_dt.astimezone(US_EASTERN_TZ)
     if not is_us_market_weekday(now_dt_et):
-        print("Entry and risk alerts skipped: US market weekend.")
+        logger.info("Entry and risk alerts skipped: US market weekend.")
         return False
 
     sent_any = False
@@ -165,13 +171,14 @@ def maybe_send_entry_alerts(state, now_dt, results, config: AppConfig) -> bool:
             getattr(result, "signal_hash", None),
         )
         if not should_send:
-            print(f"Alert skipped due to cooldown: {result.symbol} {result.alert_kind}")
+            logger.info("Alert skipped due to cooldown: %s %s", result.symbol, result.alert_kind)
             continue
 
         subject, body = compose_alert_email(result, now_dt)
         try:
             html_body = compose_alert_email_html(result, now_dt)
         except Exception:
+            logger.warning("HTML alert render failed; falling back to plain text.", exc_info=True)
             html_body = None
         if config.dry_run:
             print(subject)
@@ -199,15 +206,11 @@ def maybe_send_entry_alerts(state, now_dt, results, config: AppConfig) -> bool:
             },
         )
         sent_any = True
-        print(f"Alert sent: {result.symbol} {result.alert_kind} ({reason})")
+        logger.info("Alert sent: %s %s (%s)", result.symbol, result.alert_kind, reason)
 
     if not sent_any:
-        print("No alert sent.")
+        logger.info("No alert sent.")
     return sent_any
-
-
-def _should_alert(result, config: AppConfig) -> bool:
-    return bool(_alert_channel(result, config))
 
 
 def _alert_channel(result, config: AppConfig) -> str | None:
@@ -225,10 +228,4 @@ def _alert_channel(result, config: AppConfig) -> str | None:
 
 
 def _send_email(smtp, subject, body, html_body=None) -> None:
-    try:
-        send_email(smtp, subject, body, html_body)
-    except TypeError as exc:
-        try:
-            send_email(smtp, subject, body)
-        except TypeError:
-            raise exc
+    send_email(smtp, subject, body, html_body)
