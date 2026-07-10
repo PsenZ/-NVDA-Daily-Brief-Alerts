@@ -424,6 +424,9 @@ def test_html_reports_are_generated_with_plain_text_fallback_shape():
     assert "Executive Summary" in html
     assert "Top Actions" in html
     assert "decision review" in html
+    # M1: no duplicate "Header" pseudo-section, no leaked Markdown marker
+    assert ">Header<" not in html
+    assert "## NVDA" not in html
     assert "<html" in alert_html
     assert "NVDA Trade Alert" in alert_html
 

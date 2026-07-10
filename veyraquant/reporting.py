@@ -2,6 +2,7 @@ from datetime import datetime
 from html import escape
 
 from .config import AppConfig
+from .constants import MARKET_RISK_OFF, MARKET_RISK_ON
 from .models import MarketContext, SignalResult
 from .text_utils import dedupe
 from .timeutils import US_EASTERN_TZ
@@ -186,6 +187,10 @@ def compose_daily_report_html(
         f"<p style=\"margin:0 0 20px;color:#93c5fd;\">{escape(format_dual_time(now_dt))}</p>",
     ]
     for title, content in sections:
+        # The leading "Header" pseudo-section repeats the title/time already
+        # rendered as the <h1> and dual-time line above, so skip it.
+        if title == "Header":
+            continue
         blocks.append(_html_section(title, content))
     blocks.append("</div></body></html>")
     return "\n".join(blocks)
@@ -207,11 +212,11 @@ def compose_alert_email_html(result: SignalResult, now_dt: datetime) -> str:
 
 
 def _trading_posture(market: MarketContext, approved_count: int) -> str:
-    if market.label == "\u98ce\u9669\u89c4\u907f":
+    if market.label == MARKET_RISK_OFF:
         return "Defense first"
     if approved_count > 0:
         return "Selective execution"
-    if market.label == "\u98ce\u9669\u504f\u597d":
+    if market.label == MARKET_RISK_ON:
         return "Stay patient for cleaner entries"
     return "Neutral and patient"
 
@@ -223,7 +228,7 @@ def _summary_line(market: MarketContext, approved: list[SignalResult], deferred_
             f"The board is constructive enough to approve {len(approved)} trade plan(s), "
             f"led by {leaders}, while {deferred_count} candidate(s) remain on hold."
         )
-    if market.label == "\u98ce\u9669\u89c4\u907f":
+    if market.label == MARKET_RISK_OFF:
         return "The board stays defensive today and fresh execution should remain tightly filtered."
     return "No plan earned full approval today, so the focus shifts to watching for better alignment."
 
@@ -268,7 +273,7 @@ def _market_snapshot_lines(market: MarketContext) -> list[str]:
 def _top_action_block(result: SignalResult) -> list[str]:
     lines = [
         "",
-        f"## {result.symbol}",
+        f"── {result.symbol} ──",
         f"rating/action: {result.rating} / {result.action}",
         f"score/setup: {_score_label(result)} / {result.setup_type}",
         f"plan: {result.entry_zone} | stop {result.stop} | targets {result.targets}",
