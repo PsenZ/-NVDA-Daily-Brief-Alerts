@@ -1,3 +1,6 @@
+import logging
+from concurrent.futures import ThreadPoolExecutor
+
 from .config import AppConfig
 from .data import DataClient
 from .decision_manager import apply_portfolio_manager
@@ -5,7 +8,7 @@ from .emailer import send_email
 from .market import build_market_context
 from .memory import sync_decision_log
 from .memory_review import brief_review_notes
-from .models import SymbolData
+from .models import DataQuality, FundamentalsData, NewsBundle, SymbolData
 from .positions import apply_position_context, load_positions
 from .reporting import (
     compose_alert_email,
@@ -25,6 +28,9 @@ from .state import (
 from .timeutils import US_EASTERN_TZ, daily_report_due, is_us_market_weekday, now_sydney
 
 
+logger = logging.getLogger(__name__)
+
+
 def run(config: AppConfig | None = None) -> int:
     config = config or AppConfig.from_env()
     now_dt = now_sydney()
@@ -39,16 +45,16 @@ def run(config: AppConfig | None = None) -> int:
         and is_us_market_weekday(now_dt_et)
     )
     if not daily_due and not alerts_due:
-        print("Daily report skipped: before send threshold or already sent today.")
-        print("Entry and risk alerts skipped: disabled or US market weekend.")
-        print("Nothing sent; state unchanged.")
+        logger.info("Daily report skipped: before send threshold or already sent today.")
+        logger.info("Entry and risk alerts skipped: disabled or US market weekend.")
+        logger.info("Nothing sent; state unchanged.")
         return 0
 
     client = DataClient(config)
     positions = load_positions(config.positions_path)
-    market_histories = {symbol: client.fetch_market_daily(symbol) for symbol in config.market_symbols}
+    market_histories = _fetch_market_histories(client, config)
     market = build_market_context(market_histories)
-    symbol_data_items = [client.fetch_symbol(symbol) for symbol in config.symbols]
+    symbol_data_items = _fetch_symbol_data(client, config)
     results, portfolio_notes = build_results(symbol_data_items, market, config, positions)
     review_notes = brief_review_notes(config.memory_log_path)
 
@@ -67,14 +73,66 @@ def run(config: AppConfig | None = None) -> int:
 
     if changed and not config.dry_run:
         write_state(config.state_path, state)
-        print("State updated.")
+        logger.info("State updated.")
     elif config.dry_run:
-        print("DRY_RUN enabled; state unchanged.")
+        logger.info("DRY_RUN enabled; state unchanged.")
     elif sent_any:
-        print("Send completed; state unchanged.")
+        logger.info("Send completed; state unchanged.")
     else:
-        print("Nothing sent; state unchanged.")
+        logger.info("Nothing sent; state unchanged.")
     return 0
+
+
+def _data_workers(config: AppConfig, item_count: int) -> int:
+    requested = getattr(config, "data_workers", 4)
+    try:
+        requested = int(requested)
+    except Exception:
+        requested = 4
+    return max(1, min(requested, max(1, item_count)))
+
+
+def _fetch_market_histories(client: DataClient, config: AppConfig) -> dict:
+    symbols = list(config.market_symbols)
+    if not symbols:
+        return {}
+    workers = _data_workers(config, len(symbols))
+    if workers == 1:
+        histories = [client.fetch_market_daily(symbol) for symbol in symbols]
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            histories = list(pool.map(client.fetch_market_daily, symbols))
+    return dict(zip(symbols, histories))
+
+
+def _fetch_symbol_data(client: DataClient, config: AppConfig) -> list[SymbolData]:
+    symbols = list(config.symbols)
+    if not symbols:
+        return []
+
+    def fetch(symbol: str) -> SymbolData:
+        try:
+            return client.fetch_symbol(symbol)
+        except Exception:
+            logger.warning("%s symbol fetch failed; skipping with empty data.", symbol, exc_info=True)
+            quality = DataQuality(data_quality_level="LOW", actionable_allowed=False)
+            quality.reasons.append("symbol data fetch raised an unexpected error")
+            return SymbolData(
+                symbol=symbol,
+                daily=None,
+                intraday=None,
+                fundamentals=FundamentalsData(),
+                options=None,
+                news=NewsBundle([], [], {"score": 0.0, "label": "中性", "sample_size": 0}),
+                warnings=[f"{symbol} data fetch failed unexpectedly."],
+                data_quality=quality,
+            )
+
+    workers = _data_workers(config, len(symbols))
+    if workers == 1:
+        return [fetch(symbol) for symbol in symbols]
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(fetch, symbols))
 
 
 def build_results(symbol_data_items: list[SymbolData], market, config: AppConfig, positions=None):
@@ -111,16 +169,17 @@ def maybe_send_daily_report(
     if not config.force_daily_report and not daily_report_due(
         now_dt, config.send_hour, config.send_minute, config.send_window_minutes
     ):
-        print("Daily report skipped: before send threshold.")
+        logger.info("Daily report skipped: before send threshold.")
         return False, False
     if not config.force_daily_report and already_sent_daily(state, now_dt):
-        print("Daily report skipped: already sent today.")
+        logger.info("Daily report skipped: already sent today.")
         return False, False
 
     subject, body = compose_daily_report(results, market, config, now_dt, portfolio_notes, review_notes)
     try:
         html_body = compose_daily_report_html(results, market, config, now_dt, portfolio_notes, review_notes)
     except Exception:
+        logger.warning("HTML daily report render failed; falling back to plain text.", exc_info=True)
         html_body = None
     if config.dry_run:
         print(subject)
@@ -135,21 +194,21 @@ def maybe_send_daily_report(
         config.decision_memory_holding_days,
     )
     if config.force_daily_report:
-        print("Daily report force-sent without updating daily state.")
+        logger.info("Daily report force-sent without updating daily state.")
         return True, False
 
     mark_daily_sent(state, now_dt)
-    print("Daily report sent.")
+    logger.info("Daily report sent.")
     return True, True
 
 
 def maybe_send_entry_alerts(state, now_dt, results, config: AppConfig) -> bool:
     if not config.entry_alerts_enabled and not getattr(config, "risk_alerts_enabled", False):
-        print("Entry and risk alerts disabled.")
+        logger.info("Entry and risk alerts disabled.")
         return False
     now_dt_et = now_dt.astimezone(US_EASTERN_TZ)
     if not is_us_market_weekday(now_dt_et):
-        print("Entry and risk alerts skipped: US market weekend.")
+        logger.info("Entry and risk alerts skipped: US market weekend.")
         return False
 
     sent_any = False
@@ -165,13 +224,14 @@ def maybe_send_entry_alerts(state, now_dt, results, config: AppConfig) -> bool:
             getattr(result, "signal_hash", None),
         )
         if not should_send:
-            print(f"Alert skipped due to cooldown: {result.symbol} {result.alert_kind}")
+            logger.info("Alert skipped due to cooldown: %s %s", result.symbol, result.alert_kind)
             continue
 
         subject, body = compose_alert_email(result, now_dt)
         try:
             html_body = compose_alert_email_html(result, now_dt)
         except Exception:
+            logger.warning("HTML alert render failed; falling back to plain text.", exc_info=True)
             html_body = None
         if config.dry_run:
             print(subject)
@@ -199,15 +259,11 @@ def maybe_send_entry_alerts(state, now_dt, results, config: AppConfig) -> bool:
             },
         )
         sent_any = True
-        print(f"Alert sent: {result.symbol} {result.alert_kind} ({reason})")
+        logger.info("Alert sent: %s %s (%s)", result.symbol, result.alert_kind, reason)
 
     if not sent_any:
-        print("No alert sent.")
+        logger.info("No alert sent.")
     return sent_any
-
-
-def _should_alert(result, config: AppConfig) -> bool:
-    return bool(_alert_channel(result, config))
 
 
 def _alert_channel(result, config: AppConfig) -> str | None:
@@ -225,10 +281,4 @@ def _alert_channel(result, config: AppConfig) -> str | None:
 
 
 def _send_email(smtp, subject, body, html_body=None) -> None:
-    try:
-        send_email(smtp, subject, body, html_body)
-    except TypeError as exc:
-        try:
-            send_email(smtp, subject, body)
-        except TypeError:
-            raise exc
+    send_email(smtp, subject, body, html_body)

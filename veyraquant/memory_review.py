@@ -1,7 +1,10 @@
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any
 
+
+logger = logging.getLogger(__name__)
 
 DIMENSIONS = ("setup_type", "action", "rating", "market_regime", "portfolio_decision")
 
@@ -90,6 +93,7 @@ def _read_entries(path: str) -> list[dict[str, Any]]:
     except FileNotFoundError:
         return []
     except Exception:
+        logger.warning("Failed to read decision log: %s", path, exc_info=True)
         return []
 
 

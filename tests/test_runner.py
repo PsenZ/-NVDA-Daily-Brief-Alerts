@@ -10,7 +10,7 @@ from veyraquant.timeutils import SYDNEY_TZ
 def test_force_daily_report_sends_without_updating_daily_state(monkeypatch):
     sent = []
     monkeypatch.setattr("veyraquant.runner.compose_daily_report", lambda *args: ("subject", "body"))
-    monkeypatch.setattr("veyraquant.runner.send_email", lambda smtp, subject, body: sent.append(subject))
+    monkeypatch.setattr("veyraquant.runner.send_email", lambda *args: sent.append(args[1]))
     monkeypatch.setattr("veyraquant.runner.sync_decision_log", lambda *args, **kwargs: None)
 
     now_dt = datetime(2026, 4, 22, 2, 15, tzinfo=SYDNEY_TZ)
@@ -370,7 +370,7 @@ def test_risk_reduce_does_not_send_when_risk_alerts_disabled(monkeypatch):
 
 def test_risk_reduce_sends_when_risk_alerts_enabled(monkeypatch):
     sent = []
-    monkeypatch.setattr("veyraquant.runner.send_email", lambda smtp, subject, body: sent.append((subject, body)))
+    monkeypatch.setattr("veyraquant.runner.send_email", lambda *args: sent.append((args[1], args[2])))
 
     result = SimpleNamespace(
         rank=3,
