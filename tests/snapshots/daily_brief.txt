@@ -1,0 +1,67 @@
+VeyraQuant Morning Brief
+Time: Sydney 2026-07-10 07:35 / US Eastern 2026-07-09 17:35
+
+[Executive Summary]
+market_regime: 风险偏好
+trading_posture: Selective execution
+approved 1 | deferred 1 | watchlist 1 | rejected 1
+The board is constructive enough to approve 1 trade plan(s), led by NVDA, while 1 candidate(s) remain on hold.
+key_risk: QQQ 短线动能转弱
+
+[Market Filter]
+market_score: +18.0
+- SPY 位于 SMA20/SMA50 上方，市场背景偏多
+- SMH 半导体强度支撑科技延续
+- risk: QQQ 短线动能转弱
+- SPY: last 161.20, sma20 153.40, sma50 152.40, perf20 +7.48%
+- QQQ: last 156.40, sma20 156.80, sma50 156.10, perf20 -0.33%
+- SMH: last 177.10, sma20 176.00, sma50 171.40, perf20 +3.96%
+- ^VIX: last 16.35
+
+[Top Actions]
+
+── NVDA ──
+rating/action: Buy / BUY_TRIGGER
+score/setup: 82 / breakout_entry
+plan: $182.40 - $185.10 | stop $176.20 | targets $196.50 / $210.80
+risk budget: position 6.40% | max loss 0.50%
+why now: MACD above signal, histogram expanding. ; Relative strength beats SPY/QQQ.
+watch risk: Breakout can fail below SMA20.
+market evidence: QQQ remains above SMA20.
+trigger / cancel: breakout confirmed / cancel if invalidated
+
+[Deferred Ideas]
+symbol | rating | score | conviction | why still good | why not today
+MSFT | Overweight | 71 | high | Healthy pullback to MA10. | Deferred after reaching the daily approval limit (3).
+
+[Watch / Wait]
+symbol | rating | score | next condition | why not now
+AAPL | Hold | 58 | wait for trigger | Not ready for execution today.
+
+[Risk Actions]
+
+TSLA | Underweight | score 38
+risk reason: RSI overheated above 74. ; Price extended far above MA5.
+position_context: No open position.
+suggested posture: monitor-only
+risk note: Risk control takes priority over new exposure.
+
+[Rejected Plans]
+
+AMD | score 40
+why rejected: Trade plan validation failed.
+blocked_by: trade_plan_validation_failed
+
+[System Notes]
+- data quality:
+  - NVDA: MEDIUM - None.
+  - MSFT: MEDIUM - None.
+  - AAPL: MEDIUM - None.
+  - TSLA: MEDIUM - None.
+  - AMD: MEDIUM - None.
+- portfolio notes:
+  - Neutral market regime caps approved trades to 3.
+- decision review:
+  - setup_type:breakout_entry avg 5D alpha +1.20% over 4 resolved decision(s).
+- No broker API. No automatic orders. Every trade plan requires human review.
+- Position sizing follows existing risk controls and may be reduced by portfolio heat.
