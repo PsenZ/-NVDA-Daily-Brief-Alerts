@@ -427,8 +427,43 @@ def test_html_reports_are_generated_with_plain_text_fallback_shape():
     # M1: no duplicate "Header" pseudo-section, no leaked Markdown marker
     assert ">Header<" not in html
     assert "## NVDA" not in html
+    # M2/M3: HTML is built from structured data as real tables, not by
+    # re-parsing plain text and joining lines with <br>.
+    assert "<table" in html
+    assert "<br>" not in html
+    assert "<section" not in html
+    assert "symbol | rating" not in html  # pipe rows became real table cells
     assert "<html" in alert_html
     assert "NVDA Trade Alert" in alert_html
+    assert "<table" in alert_html
+    assert "<br>" not in alert_html
+
+
+def test_html_renders_deferred_and_watch_as_real_table_cells():
+    config = make_config()
+    market = MarketContext(
+        label="风险偏好", score=18.0, reasons=["QQQ above SMA20"], risks=[], snapshots={}
+    )
+    deferred = make_result(
+        "MSFT", "ADD_TRIGGER", "pullback", 71, setup_type="pullback_add",
+        rating="Overweight", is_actionable=True, plan_kind="add",
+        bull_case=["Healthy pullback to MA10."],
+        portfolio_decision="deferred",
+        portfolio_reason="Deferred after reaching the daily approval limit (3).",
+    )
+    watch = make_result(
+        "AAPL", "WATCH", "hold_watch", 58, setup_type="hold_watch", rating="Hold",
+        portfolio_decision="watchlist", portfolio_reason="Not ready for execution today.",
+    )
+    html = compose_daily_report_html(
+        [deferred, watch], market, config, datetime(2026, 4, 20, 7, 30, tzinfo=SYDNEY_TZ)
+    )
+    # Symbols appear as isolated table cells, not inside a piped text row.
+    assert ">MSFT<" in html
+    assert ">AAPL<" in html
+    assert "<th" in html and "<td" in html
+    assert "MSFT | Overweight" not in html
+    assert "<br>" not in html
 
 
 def test_strategy_config_can_tighten_breakout_volume_without_changing_default_behavior():
