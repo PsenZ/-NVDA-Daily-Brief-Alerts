@@ -1,10 +1,8 @@
-import json
-import logging
 from dataclasses import dataclass
 from typing import Any
 
+from .jsonl import read_entries
 
-logger = logging.getLogger(__name__)
 
 DIMENSIONS = ("setup_type", "action", "rating", "market_regime", "portfolio_decision")
 
@@ -22,7 +20,7 @@ class ReviewSummary:
 
 
 def build_review_summaries(path: str, dimensions: tuple[str, ...] = DIMENSIONS) -> list[ReviewSummary]:
-    entries = _read_entries(path)
+    entries = read_entries(path)
     summaries: list[ReviewSummary] = []
     for dimension in dimensions:
         buckets: dict[str, list[dict[str, Any]]] = {}
@@ -84,17 +82,6 @@ def _summarize_bucket(dimension: str, key: str, rows: list[dict[str, Any]]) -> R
         avg_alpha_vs_spy=_avg(alphas),
         win_rate=win_rate,
     )
-
-
-def _read_entries(path: str) -> list[dict[str, Any]]:
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            return [json.loads(line) for line in handle if line.strip()]
-    except FileNotFoundError:
-        return []
-    except Exception:
-        logger.warning("Failed to read decision log: %s", path, exc_info=True)
-        return []
 
 
 def _as_float(value) -> float | None:

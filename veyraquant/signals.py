@@ -11,9 +11,6 @@ from .constants import (
     ACTION_TO_SIGNAL_TYPE,
     ACTIONABLE_ACTIONS,
     MARKET_EVIDENCE_MARKERS,
-    MARKET_RISK_OFF,
-    MARKET_RISK_ON,
-    SETUP_TO_ACTION,
 )
 from .features import intraday_snapshot, tech_summary
 from .models import (
@@ -23,15 +20,34 @@ from .models import (
     NewsBundle,
     OptionsData,
     SignalResult,
-    TechSnapshot,
     TradePlan,
 )
 from .risk import portfolio_heat_cap
-from .scoring import _snapshot_perf, score_components
+from .scoring import score_components
 from .setups import apply_action_policy, choose_signal_type, classify_setup
-from .trade_plan import build_trade_plan, preview_trade_plan
-from .trade_plan import _non_actionable_plan
+from .text_utils import dedupe
+from .trade_plan import _non_actionable_plan, build_trade_plan, preview_trade_plan
 from .validator import validate_trade_plan
+
+
+# Public surface. Several names are re-exported from submodules so that
+# `from veyraquant.signals import ...` and tests that monkeypatch
+# `veyraquant.signals.<name>` keep working after the module split.
+__all__ = [
+    "analyze_symbol",
+    "assign_ranks",
+    "enforce_portfolio_heat",
+    "annotate_signal_result",
+    "refresh_signal_result",
+    "tech_summary",
+    "intraday_snapshot",
+    "score_components",
+    "classify_setup",
+    "apply_action_policy",
+    "choose_signal_type",
+    "build_trade_plan",
+    "preview_trade_plan",
+]
 
 
 def analyze_symbol(
@@ -271,9 +287,10 @@ def _result(
 
 
 def _derive_market_evidence(result: SignalResult, market: MarketContext) -> list[str]:
-    evidence = _top_unique(
+    evidence = dedupe(
         [item for item in result.reasons if any(marker in item for marker in MARKET_EVIDENCE_MARKERS)]
-        + market.reasons[:2]
+        + market.reasons[:2],
+        drop_empty=True,
     )
     if evidence:
         return evidence[:2]
@@ -296,7 +313,7 @@ def _derive_bull_case(result: SignalResult) -> list[str]:
 
 
 def _derive_bear_case(result: SignalResult) -> list[str]:
-    candidates = _top_unique(result.validation_warnings + result.rejection_reasons + result.risks)
+    candidates = dedupe(result.validation_warnings + result.rejection_reasons + result.risks, drop_empty=True)
     if candidates:
         return candidates[:2]
     if result.action == "BUY_TRIGGER":
@@ -338,14 +355,3 @@ def _decision_balance(result: SignalResult) -> str:
     if result.action in ACTIONABLE_ACTIONS:
         return "favorable"
     return "mixed"
-
-
-def _top_unique(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for item in items:
-        if not item or item in seen:
-            continue
-        seen.add(item)
-        ordered.append(item)
-    return ordered

@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 
 from .config import AppConfig
 from .models import TradePlan
+from .money import parse_money
 
 
 @dataclass(frozen=True)
@@ -18,7 +19,7 @@ def validate_trade_plan(plan: TradePlan, config: AppConfig) -> ValidationResult:
     entry_low, entry_high = _plan_entry_zone(plan)
     stop = _parse_float(plan.stop_price)
     if stop is None:
-        stop = _parse_money(plan.stop)
+        stop = parse_money(plan.stop)
     target1 = _parse_float(plan.target1)
     if target1 is None:
         target1 = _parse_first_target(plan.targets)
@@ -91,23 +92,15 @@ def _parse_entry_zone(value: str) -> tuple[float | None, float | None]:
     if not value or " - " not in value:
         return None, None
     left, right = value.split(" - ", 1)
-    return _parse_money(left), _parse_money(right)
+    return parse_money(left), parse_money(right)
 
 
 def _parse_first_target(value: str) -> float | None:
     if not value or "/" not in value:
-        return _parse_money(value)
+        return parse_money(value)
     left, _right = value.split("/", 1)
-    return _parse_money(left)
+    return parse_money(left)
 
-
-def _parse_money(value) -> float | None:
-    if value in {None, "", "NA"}:
-        return None
-    try:
-        return float(str(value).replace("$", "").replace(",", "").strip())
-    except Exception:
-        return None
 
 
 def _parse_float(value) -> float | None:
