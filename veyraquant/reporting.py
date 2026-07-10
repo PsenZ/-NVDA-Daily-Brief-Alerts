@@ -3,6 +3,7 @@ from html import escape
 
 from .config import AppConfig
 from .models import MarketContext, SignalResult
+from .text_utils import dedupe
 from .timeutils import US_EASTERN_TZ
 
 
@@ -322,14 +323,14 @@ def _rejected_block(result: SignalResult) -> list[str]:
 
 def _system_notes(results: list[SignalResult], portfolio_notes: list[str], review_notes: list[str]) -> list[str]:
     lines: list[str] = []
-    data_warnings = _unique([warning for result in results for warning in result.warnings])
-    validation_warnings = _unique(
+    data_warnings = dedupe([warning for result in results for warning in result.warnings])
+    validation_warnings = dedupe(
         [warning for result in results for warning in result.validation_warnings]
     )
-    heat_warnings = _unique(
+    heat_warnings = dedupe(
         [warning for result in results for warning in result.portfolio_warnings]
     )
-    data_quality_notes = _unique(
+    data_quality_notes = dedupe(
         [
             f"{result.symbol}: {result.data_quality.data_quality_level} - "
             f"{_compact_summary(result.data_quality.reasons, 2)}"
@@ -347,9 +348,9 @@ def _system_notes(results: list[SignalResult], portfolio_notes: list[str], revie
     if heat_warnings:
         lines.extend(["- portfolio heat warnings:"] + [f"  - {item}" for item in heat_warnings[:6]])
     if portfolio_notes:
-        lines.extend(["- portfolio notes:"] + [f"  - {item}" for item in _unique(portfolio_notes)[:6]])
+        lines.extend(["- portfolio notes:"] + [f"  - {item}" for item in dedupe(portfolio_notes)[:6]])
     if review_notes:
-        lines.extend(["- decision review:"] + [f"  - {item}" for item in _unique(review_notes)[:4]])
+        lines.extend(["- decision review:"] + [f"  - {item}" for item in dedupe(review_notes)[:4]])
     return lines
 
 
@@ -400,13 +401,3 @@ def _score_label(result: SignalResult) -> str:
         return "100+"
     return str(result.score)
 
-
-def _unique(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for item in items:
-        if item in seen:
-            continue
-        seen.add(item)
-        ordered.append(item)
-    return ordered

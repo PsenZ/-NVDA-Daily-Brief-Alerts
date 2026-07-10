@@ -4,6 +4,7 @@ from typing import Any
 from .config import DEFAULT_SECTOR_MAP, DEFAULT_SECTOR_POSITION_LIMITS, DEFAULT_SECTOR_RISK_LIMITS
 from .models import MarketContext, SignalResult
 from .risk import budget_after, budget_exceeded
+from .text_utils import dedupe
 
 
 ACTIONABLE_ACTIONS = {"BUY_TRIGGER", "ADD_TRIGGER"}
@@ -121,7 +122,7 @@ def apply_portfolio_manager(
         notes.append(f"Neutral market regime caps approved trades to {approved_limit}.")
     if not candidates:
         notes.append("No actionable candidate reached portfolio review.")
-    return results, _dedupe_preserve_order(notes)
+    return results, dedupe(notes)
 
 
 def _candidate_priority(result: SignalResult) -> tuple[float, int]:
@@ -203,12 +204,3 @@ def _config_dict(config: Any | None, attr: str, default: dict) -> dict:
     return dict(default)
 
 
-def _dedupe_preserve_order(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for item in items:
-        if item in seen:
-            continue
-        seen.add(item)
-        ordered.append(item)
-    return ordered

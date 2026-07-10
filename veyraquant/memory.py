@@ -1,8 +1,7 @@
-import json
-import os
 from datetime import datetime, timedelta
 from typing import Any, Callable
 
+from .jsonl import read_entries, write_entries
 from .models import SignalResult
 
 
@@ -16,7 +15,7 @@ def sync_decision_log(
     holding_days: int = 5,
     fetch_return: Callable[[str, str, int], float | None] | None = None,
 ) -> list[dict[str, Any]]:
-    entries = _read_entries(path)
+    entries = read_entries(path)
     entries = _resolve_pending(entries, now_dt, holding_days, fetch_return or _fetch_holding_return)
 
     existing_ids = {entry["decision_id"] for entry in entries}
@@ -26,7 +25,7 @@ def sync_decision_log(
             entries.append(entry)
             existing_ids.add(entry["decision_id"])
 
-    _write_entries(path, entries)
+    write_entries(path, entries)
     return entries
 
 
@@ -116,22 +115,3 @@ def _fetch_holding_return(symbol: str, trade_date: str, holding_days: int) -> fl
     if entry_price == 0:
         return None
     return (exit_price - entry_price) / entry_price
-
-
-def _read_entries(path: str) -> list[dict[str, Any]]:
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            return [json.loads(line) for line in handle if line.strip()]
-    except FileNotFoundError:
-        return []
-    except Exception:
-        return []
-
-
-def _write_entries(path: str, entries: list[dict[str, Any]]) -> None:
-    directory = os.path.dirname(path)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as handle:
-        for entry in entries:
-            handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
