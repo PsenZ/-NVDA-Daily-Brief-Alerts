@@ -170,6 +170,24 @@ def compose_alert_email(result: SignalResult, now_dt: datetime) -> tuple[str, st
     return subject, "\n".join(lines)
 
 
+# Email-safe palette (inline styles only; email clients strip <style>).
+_HTML_BG = "#0f172a"
+_HTML_CARD = "#1f2937"
+_HTML_TEXT = "#e5e7eb"
+_HTML_MUTED = "#9aa5b8"
+_HTML_HEAD = "#f8fafc"
+_HTML_ACCENT = "#93c5fd"
+_HTML_ROW_ALT = "#243244"
+_HTML_BORDER = "#334155"
+_SECTION_ACCENT = {
+    "Top Actions": "#22c55e",
+    "Deferred Ideas": "#38bdf8",
+    "Watch / Wait": "#a3e635",
+    "Risk Actions": "#f97316",
+    "Rejected Plans": "#ef4444",
+}
+
+
 def compose_daily_report_html(
     results: list[SignalResult],
     market: MarketContext,
@@ -178,37 +196,333 @@ def compose_daily_report_html(
     portfolio_notes: list[str] | None = None,
     review_notes: list[str] | None = None,
 ) -> str:
-    _subject, plain = compose_daily_report(results, market, config, now_dt, portfolio_notes, review_notes)
-    sections = _plain_sections(plain)
-    blocks = [
-        "<!doctype html><html><body style=\"margin:0;background:#0f172a;color:#e5e7eb;font-family:Arial,sans-serif;\">",
-        "<div style=\"max-width:860px;margin:0 auto;padding:24px;\">",
-        "<h1 style=\"margin:0 0 8px;font-size:24px;\">VeyraQuant Morning Brief</h1>",
-        f"<p style=\"margin:0 0 20px;color:#93c5fd;\">{escape(format_dual_time(now_dt))}</p>",
+    """Render the brief directly from structured data (not by re-parsing plain text)."""
+    approved = [item for item in results if item.portfolio_decision == "approved"][:3]
+    deferred_ideas = [
+        item
+        for item in results
+        if item.portfolio_decision == "deferred" and item.action not in {"RISK_REDUCE", "REJECT"}
     ]
-    for title, content in sections:
-        # The leading "Header" pseudo-section repeats the title/time already
-        # rendered as the <h1> and dual-time line above, so skip it.
-        if title == "Header":
-            continue
-        blocks.append(_html_section(title, content))
-    blocks.append("</div></body></html>")
+    watchlist = [
+        item
+        for item in results
+        if item.portfolio_decision == "watchlist" and item.action in {"WATCH", "WAIT"}
+    ]
+    risk_actions = [item for item in results if item.action == "RISK_REDUCE"]
+    rejected = [item for item in results if item.action == "REJECT"]
+
+    blocks = [
+        f"<!doctype html><html><body style=\"margin:0;background:{_HTML_BG};color:{_HTML_TEXT};"
+        "font-family:Arial,Helvetica,sans-serif;\">",
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        f"style=\"background:{_HTML_BG};\"><tr><td align=\"center\" style=\"padding:24px 12px;\">",
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        "style=\"max-width:640px;width:100%;\"><tr><td>",
+        f"<h1 style=\"margin:0 0 6px;font-size:22px;color:{_HTML_HEAD};\">VeyraQuant Morning Brief</h1>",
+        f"<p style=\"margin:0 0 20px;font-size:13px;color:{_HTML_ACCENT};\">"
+        f"{escape(format_dual_time(now_dt))}</p>",
+        _html_summary_card(market, approved, deferred_ideas, watchlist, rejected, results),
+        _html_market_card(market),
+        _html_top_actions_card(approved),
+        _html_table_card(
+            "Deferred Ideas",
+            ["Symbol", "Rating", "Score", "Conviction", "Why still good", "Why not today"],
+            [_deferred_cells(r) for r in deferred_ideas],
+            empty="No deferred high-conviction ideas today.",
+        ),
+        _html_table_card(
+            "Watch / Wait",
+            ["Symbol", "Rating", "Score", "Next condition", "Why not now"],
+            [_watchlist_cells(r) for r in watchlist],
+            empty="No watch / wait names today.",
+        ),
+        _html_risk_actions_card(risk_actions),
+        _html_rejected_card(rejected),
+        _html_notes_card(results, portfolio_notes or [], review_notes or []),
+        f"<p style=\"margin:18px 0 0;font-size:11px;color:{_HTML_MUTED};line-height:1.5;\">"
+        "No broker API. No automatic orders. Every trade plan requires human review. "
+        "Position sizing follows existing risk controls and may be reduced by portfolio heat.</p>",
+        "</td></tr></table></td></tr></table></body></html>",
+    ]
     return "\n".join(blocks)
 
 
 def compose_alert_email_html(result: SignalResult, now_dt: datetime) -> str:
-    _subject, plain = compose_alert_email(result, now_dt)
-    lines = [line for line in plain.splitlines() if line.strip()]
-    title = escape(lines[0]) if lines else escape(result.symbol)
-    rows = "".join(f"<p style=\"margin:6px 0;\">{escape(line)}</p>" for line in lines[1:])
-    border = "#f97316" if result.action == "RISK_REDUCE" else "#22c55e"
+    is_risk = result.action == "RISK_REDUCE"
+    border = "#f97316" if is_risk else "#22c55e"
+    dual_time = format_dual_time(now_dt)
+    kind = "Risk Alert" if is_risk else "Trade Alert"
+    title = f"{result.symbol} {kind}"
+
+    if is_risk:
+        rows = (
+            _html_kv("rating / action", f"{result.rating} / {result.action}")
+            + _html_kv("score", _score_label(result))
+            + _html_kv("market_regime", result.market_regime)
+            + _html_kv("risk reason", _compact_summary(result.bear_case or result.risks, 2))
+            + _html_kv("position", getattr(result, "position_context", "No open position."))
+            + _html_kv("suggested posture", getattr(result, "suggested_posture", "monitor-only"))
+            + _html_kv("risk note", result.portfolio_reason or "Monitor the risk condition.")
+        )
+    else:
+        rows = (
+            _html_kv("rating / action", f"{result.rating} / {result.action}")
+            + _html_kv("score / setup", f"{_score_label(result)} / {result.setup_type}")
+            + _html_kv("data_quality", result.data_quality.data_quality_level)
+            + _html_kv("plan", f"{result.entry_zone} | stop {result.stop} | targets {result.targets}")
+            + _html_kv(
+                "risk budget",
+                f"position {result.position_pct:.2f}% | max loss {result.max_loss_pct:.2f}%",
+            )
+            + _html_kv("why now", _compact_summary(result.bull_case, 2))
+            + _html_kv("watch risk", _compact_summary(result.bear_case, 2))
+            + _html_kv("market evidence", _compact_summary(result.market_evidence, 1))
+            + _html_kv(
+                "trigger / cancel", f"{result.trade_plan.trigger} / {result.trade_plan.cancel}"
+            )
+        )
+        if result.validation_warnings:
+            rows += _html_kv("validation warning", _compact_summary(result.validation_warnings, 1))
+
     return (
-        "<!doctype html><html><body style=\"margin:0;background:#111827;color:#e5e7eb;font-family:Arial,sans-serif;\">"
-        "<div style=\"max-width:720px;margin:0 auto;padding:24px;\">"
-        f"<div style=\"border-left:4px solid {border};padding:16px;background:#1f2937;\">"
-        f"<h1 style=\"margin:0 0 12px;font-size:22px;\">{title}</h1>{rows}"
-        "</div></div></body></html>"
+        f"<!doctype html><html><body style=\"margin:0;background:{_HTML_BG};color:{_HTML_TEXT};"
+        "font-family:Arial,Helvetica,sans-serif;\">"
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        f"style=\"background:{_HTML_BG};\"><tr><td align=\"center\" style=\"padding:24px 12px;\">"
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        f"style=\"max-width:560px;width:100%;background:{_HTML_CARD};border-left:4px solid {border};"
+        "border-radius:6px;\"><tr><td style=\"padding:18px 20px;\">"
+        f"<h1 style=\"margin:0 0 4px;font-size:19px;color:{_HTML_HEAD};\">{escape(title)}</h1>"
+        f"<p style=\"margin:0 0 14px;font-size:12px;color:{_HTML_ACCENT};\">{escape(dual_time)}</p>"
+        f"{rows}"
+        "</td></tr></table></td></tr></table></body></html>"
     )
+
+
+def _html_card(title: str, inner: str, accent: str | None = None) -> str:
+    accent = accent or _SECTION_ACCENT.get(title, "#64748b")
+    heading = (
+        f"<h2 style=\"margin:0 0 12px;font-size:15px;color:{_HTML_HEAD};"
+        f"letter-spacing:0.02em;\">{escape(title)}</h2>"
+        if title
+        else ""
+    )
+    return (
+        f"<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        f"style=\"background:{_HTML_CARD};border-top:3px solid {accent};"
+        "border-radius:6px;margin:0 0 14px;\"><tr><td style=\"padding:16px 18px;\">"
+        f"{heading}{inner}</td></tr></table>"
+    )
+
+
+def _html_kv(label: str, value: str) -> str:
+    return (
+        f"<p style=\"margin:0 0 6px;font-size:13px;color:{_HTML_TEXT};line-height:1.5;\">"
+        f"<span style=\"color:{_HTML_MUTED};\">{escape(label)}: </span>{escape(value)}</p>"
+    )
+
+
+def _html_summary_card(market, approved, deferred, watchlist, rejected, results) -> str:
+    counts = (
+        f"<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 10px;\"><tr>"
+        + "".join(
+            f"<td style=\"padding:0 14px 0 0;font-size:13px;color:{_HTML_TEXT};\">"
+            f"<span style=\"font-size:20px;font-weight:bold;color:{color};"
+            f"font-variant-numeric:tabular-nums;\">{n}</span> "
+            f"<span style=\"color:{_HTML_MUTED};\">{label}</span></td>"
+            for n, label, color in (
+                (len(approved), "approved", "#22c55e"),
+                (len(deferred), "deferred", "#38bdf8"),
+                (len(watchlist), "watch", "#a3e635"),
+                (len(rejected), "rejected", "#ef4444"),
+            )
+        )
+        + "</tr></table>"
+    )
+    inner = (
+        _html_kv("market_regime", market.label)
+        + _html_kv("trading_posture", _trading_posture(market, len(approved)))
+        + counts
+        + f"<p style=\"margin:0 0 6px;font-size:13px;color:{_HTML_TEXT};line-height:1.5;\">"
+        + escape(_summary_line(market, approved, len(deferred)))
+        + "</p>"
+        + _html_kv("key_risk", _key_risk_line(market, results).replace("key_risk: ", "", 1))
+    )
+    return _html_card("Executive Summary", inner, accent="#64748b")
+
+
+def _html_market_card(market: MarketContext) -> str:
+    inner = _html_kv("market_score", f"{market.score:+.1f}")
+    bullets = [f"- {reason}" for reason in market.reasons[:3]]
+    bullets += [f"- risk: {risk}" for risk in market.risks[:2]]
+    bullets += _market_snapshot_lines(market)
+    inner += "".join(
+        f"<p style=\"margin:0 0 4px;font-size:13px;color:{_HTML_TEXT};line-height:1.5;\">"
+        f"{escape(line)}</p>"
+        for line in bullets
+    )
+    return _html_card("Market Filter", inner, accent="#64748b")
+
+
+def _html_top_actions_card(approved: list[SignalResult]) -> str:
+    if not approved:
+        return _html_card(
+            "Top Actions",
+            f"<p style=\"margin:0;font-size:13px;color:{_HTML_MUTED};\">"
+            "No approved trade plans today.</p>",
+        )
+    blocks = []
+    for i, result in enumerate(approved):
+        divider = (
+            f"<div style=\"border-top:1px solid {_HTML_BORDER};margin:14px 0;\"></div>" if i else ""
+        )
+        name = (
+            f"<p style=\"margin:0 0 8px;font-size:15px;font-weight:bold;color:{_HTML_HEAD};\">"
+            f"{escape(result.symbol)} "
+            f"<span style=\"font-size:12px;font-weight:normal;color:{_HTML_MUTED};\">"
+            f"{escape(result.rating)} / {escape(result.action)}</span></p>"
+        )
+        plan = (
+            f"<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">"
+            + "".join(
+                f"<tr><td style=\"padding:1px 16px 1px 0;font-size:12px;color:{_HTML_MUTED};\">{escape(k)}</td>"
+                f"<td style=\"padding:1px 0;font-size:13px;color:{_HTML_TEXT};"
+                f"font-variant-numeric:tabular-nums;\">{escape(v)}</td></tr>"
+                for k, v in (
+                    ("score / setup", f"{_score_label(result)} / {result.setup_type}"),
+                    ("entry", result.entry_zone),
+                    ("stop", result.stop),
+                    ("targets", result.targets),
+                    ("risk budget", f"position {result.position_pct:.2f}% | max loss {result.max_loss_pct:.2f}%"),
+                )
+            )
+            + "</table>"
+        )
+        detail = (
+            _html_kv("why now", _compact_summary(result.bull_case, 2))
+            + _html_kv("watch risk", _compact_summary(result.bear_case, 2))
+            + _html_kv("market evidence", _compact_summary(result.market_evidence, 1))
+            + _html_kv("trigger / cancel", f"{result.trade_plan.trigger} / {result.trade_plan.cancel}")
+        )
+        if result.validation_warnings:
+            detail += _html_kv("validation warning", _compact_summary(result.validation_warnings, 1))
+        blocks.append(divider + name + plan + detail)
+    return _html_card("Top Actions", "".join(blocks))
+
+
+def _html_table_card(title: str, headers: list[str], rows: list[list[str]], empty: str) -> str:
+    if not rows:
+        return _html_card(
+            title, f"<p style=\"margin:0;font-size:13px;color:{_HTML_MUTED};\">{escape(empty)}</p>"
+        )
+    head = "".join(
+        f"<th align=\"left\" style=\"padding:6px 10px;font-size:11px;text-transform:uppercase;"
+        f"letter-spacing:0.04em;color:{_HTML_MUTED};border-bottom:1px solid {_HTML_BORDER};"
+        f"white-space:nowrap;\">{escape(h)}</th>"
+        for h in headers
+    )
+    body_rows = []
+    for idx, cells in enumerate(rows):
+        bg = _HTML_ROW_ALT if idx % 2 else _HTML_CARD
+        tds = "".join(
+            f"<td style=\"padding:6px 10px;font-size:12px;color:{_HTML_TEXT};"
+            f"vertical-align:top;font-variant-numeric:tabular-nums;\">{escape(cell)}</td>"
+            for cell in cells
+        )
+        body_rows.append(f"<tr style=\"background:{bg};\">{tds}</tr>")
+    table = (
+        "<div style=\"overflow-x:auto;\">"
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        "style=\"border-collapse:collapse;width:100%;\">"
+        f"<tr>{head}</tr>{''.join(body_rows)}</table></div>"
+    )
+    return _html_card(title, table)
+
+
+def _html_risk_actions_card(risk_actions: list[SignalResult]) -> str:
+    if not risk_actions:
+        return _html_card(
+            "Risk Actions",
+            f"<p style=\"margin:0;font-size:13px;color:{_HTML_MUTED};\">"
+            "No active risk-reduction signals today.</p>",
+        )
+    blocks = []
+    for i, result in enumerate(risk_actions):
+        divider = (
+            f"<div style=\"border-top:1px solid {_HTML_BORDER};margin:14px 0;\"></div>" if i else ""
+        )
+        name = (
+            f"<p style=\"margin:0 0 6px;font-size:14px;font-weight:bold;color:{_HTML_HEAD};\">"
+            f"{escape(result.symbol)} "
+            f"<span style=\"font-size:12px;font-weight:normal;color:{_HTML_MUTED};\">"
+            f"{escape(result.rating)} · score {escape(_score_label(result))}</span></p>"
+        )
+        detail = (
+            _html_kv("risk reason", _compact_summary(result.bear_case or result.risks, 2))
+            + _html_kv("position", getattr(result, "position_context", "No open position."))
+            + _html_kv("suggested posture", getattr(result, "suggested_posture", "monitor-only"))
+            + _html_kv("risk note", result.portfolio_reason or "Monitor the risk condition.")
+        )
+        blocks.append(divider + name + detail)
+    return _html_card("Risk Actions", "".join(blocks))
+
+
+def _html_rejected_card(rejected: list[SignalResult]) -> str:
+    if not rejected:
+        return _html_card(
+            "Rejected Plans",
+            f"<p style=\"margin:0;font-size:13px;color:{_HTML_MUTED};\">No rejected plans today.</p>",
+        )
+    blocks = []
+    for i, result in enumerate(rejected):
+        divider = (
+            f"<div style=\"border-top:1px solid {_HTML_BORDER};margin:12px 0;\"></div>" if i else ""
+        )
+        name = (
+            f"<p style=\"margin:0 0 6px;font-size:14px;font-weight:bold;color:{_HTML_HEAD};\">"
+            f"{escape(result.symbol)} "
+            f"<span style=\"font-size:12px;font-weight:normal;color:{_HTML_MUTED};\">"
+            f"score {escape(_score_label(result))}</span></p>"
+        )
+        detail = _html_kv(
+            "why rejected", _compact_summary(result.rejection_reasons or result.bear_case, 2)
+        ) + _html_kv("blocked_by", _compact_summary(result.suppressed_by, 2))
+        blocks.append(divider + name + detail)
+    return _html_card("Rejected Plans", "".join(blocks))
+
+
+def _html_notes_card(results, portfolio_notes, review_notes) -> str:
+    lines = _system_notes(results, portfolio_notes, review_notes)
+    if not lines:
+        return ""
+    html_lines = []
+    for line in lines:
+        indented = line.startswith("  ")
+        pad = "18px" if indented else "0"
+        weight = "normal" if indented else "bold"
+        color = _HTML_TEXT if indented else _HTML_ACCENT
+        html_lines.append(
+            f"<p style=\"margin:0 0 3px;padding-left:{pad};font-size:12px;color:{color};"
+            f"font-weight:{weight};line-height:1.5;\">{escape(line.strip())}</p>"
+        )
+    return _html_card("System Notes", "".join(html_lines), accent="#64748b")
+
+
+def _deferred_cells(result: SignalResult) -> list[str]:
+    return [
+        result.symbol,
+        result.rating,
+        _score_label(result),
+        result.conviction_level,
+        _compact_summary(result.bull_case, 1),
+        result.portfolio_reason,
+    ]
+
+
+def _watchlist_cells(result: SignalResult) -> list[str]:
+    next_condition = result.trade_plan.trigger or "Wait for better alignment."
+    why_not_now = result.portfolio_reason or _compact_summary(result.bear_case or result.risks, 1)
+    return [result.symbol, result.rating, _score_label(result), next_condition, why_not_now]
 
 
 def _trading_posture(market: MarketContext, approved_count: int) -> str:
@@ -357,41 +671,6 @@ def _system_notes(results: list[SignalResult], portfolio_notes: list[str], revie
     if review_notes:
         lines.extend(["- decision review:"] + [f"  - {item}" for item in dedupe(review_notes)[:4]])
     return lines
-
-
-def _plain_sections(body: str) -> list[tuple[str, list[str]]]:
-    sections: list[tuple[str, list[str]]] = []
-    title = "Header"
-    current: list[str] = []
-    for line in body.splitlines():
-        if line.startswith("[") and line.endswith("]"):
-            if current:
-                sections.append((title, current))
-            title = line.strip("[]")
-            current = []
-        else:
-            current.append(line)
-    if current:
-        sections.append((title, current))
-    return sections
-
-
-def _html_section(title: str, lines: list[str]) -> str:
-    accent = {
-        "Top Actions": "#22c55e",
-        "Deferred Ideas": "#38bdf8",
-        "Watch / Wait": "#a3e635",
-        "Risk Actions": "#f97316",
-        "Rejected Plans": "#ef4444",
-    }.get(title, "#64748b")
-    content = "<br>".join(escape(line) for line in lines if line != "")
-    return (
-        f"<section style=\"border-top:3px solid {accent};background:#1f2937;"
-        "padding:16px;margin:0 0 14px;border-radius:6px;\">"
-        f"<h2 style=\"margin:0 0 10px;font-size:18px;color:#f8fafc;\">{escape(title)}</h2>"
-        f"<div style=\"font-size:14px;line-height:1.55;color:#d1d5db;\">{content}</div>"
-        "</section>"
-    )
 
 
 def _compact_summary(items: list[str], limit: int = 2) -> str:
