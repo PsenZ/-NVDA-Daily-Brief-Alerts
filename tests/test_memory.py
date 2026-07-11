@@ -101,3 +101,52 @@ def test_sync_decision_log_marks_unresolved_when_returns_missing(tmp_path):
     assert entries[0]["outcome_status"] == "unresolved"
     assert entries[0]["five_day_return"] is None
     assert entries[0]["alpha_vs_spy"] is None
+
+
+def test_multi_horizon_returns_filled_on_resolution(tmp_path):
+    path = tmp_path / "decision_log.jsonl"
+    initial_dt = datetime(2026, 4, 20, 7, 30, tzinfo=SYDNEY_TZ)
+    later_dt = datetime(2026, 4, 28, 7, 30, tzinfo=SYDNEY_TZ)
+    sync_decision_log(str(path), initial_dt, [_make_result("NVDA", "h1")], holding_days=5, fetch_return=lambda *_: None)
+
+    def fake_return(symbol, _date, days):
+        return days * (0.01 if symbol == "NVDA" else 0.004)
+
+    entries = sync_decision_log(str(path), later_dt, [], holding_days=5, fetch_return=fake_return)
+    entry = entries[0]
+
+    assert entry["outcome_status"] == "resolved"
+    assert entry["horizon_returns"] == {"1": 0.01, "3": 0.03, "5": 0.05, "10": 0.1}
+    assert entry["horizon_alphas"]["5"] == 0.03
+    assert entry["horizon_alphas"]["10"] == 0.06
+    # Primary fields stay aligned with the 5-day horizon.
+    assert entry["five_day_return"] == 0.05
+    assert entry["alpha_vs_spy"] == 0.03
+
+
+def test_missing_long_horizon_backfilled_on_later_run(tmp_path):
+    path = tmp_path / "decision_log.jsonl"
+    initial_dt = datetime(2026, 4, 20, 7, 30, tzinfo=SYDNEY_TZ)
+    resolve_dt = datetime(2026, 4, 28, 7, 30, tzinfo=SYDNEY_TZ)
+    backfill_dt = datetime(2026, 5, 6, 7, 30, tzinfo=SYDNEY_TZ)
+    sync_decision_log(str(path), initial_dt, [_make_result("NVDA", "h1")], holding_days=5, fetch_return=lambda *_: None)
+
+    def early_fetch(symbol, _date, days):
+        if days >= 10:
+            return None  # 10-day horizon not observable yet
+        return days * (0.01 if symbol == "NVDA" else 0.004)
+
+    entries = sync_decision_log(str(path), resolve_dt, [], holding_days=5, fetch_return=early_fetch)
+    assert entries[0]["outcome_status"] == "resolved"
+    assert "10" not in entries[0]["horizon_returns"]
+
+    def late_fetch(symbol, _date, days):
+        return days * (0.01 if symbol == "NVDA" else 0.004)
+
+    entries = sync_decision_log(str(path), backfill_dt, [], holding_days=5, fetch_return=late_fetch)
+    entry = entries[0]
+    assert entry["outcome_status"] == "resolved"
+    assert entry["horizon_returns"]["10"] == 0.1
+    assert entry["horizon_alphas"]["10"] == 0.06
+    # Already-filled horizons are not refetched/overwritten.
+    assert entry["horizon_returns"]["5"] == 0.05
