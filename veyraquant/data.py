@@ -120,6 +120,39 @@ def _as_eastern(ts) -> Optional[pd.Timestamp]:
     return stamp.tz_convert(US_EASTERN_TZ)
 
 
+def days_to_next_earnings(calendar: Any, today) -> Optional[int]:
+    """Parse a yfinance calendar payload into days-until-next-earnings.
+
+    Accepts the modern dict form ({"Earnings Date": [date, ...]}) and the
+    legacy DataFrame form; returns None when nothing parseable is found.
+    """
+    raw_dates: list[Any] = []
+    if isinstance(calendar, dict):
+        raw = calendar.get("Earnings Date")
+        if raw is None:
+            raw_dates = []
+        elif isinstance(raw, (list, tuple)):
+            raw_dates = list(raw)
+        else:
+            raw_dates = [raw]
+    elif calendar is not None and hasattr(calendar, "loc"):
+        try:
+            raw_dates = list(calendar.loc["Earnings Date"])
+        except Exception:
+            raw_dates = []
+
+    future_days: list[int] = []
+    for item in raw_dates:
+        try:
+            date = pd.Timestamp(item).date()
+        except Exception:
+            continue
+        delta = (date - today).days
+        if delta >= 0:
+            future_days.append(delta)
+    return min(future_days) if future_days else None
+
+
 def trim_incomplete_bars(
     data: Optional[pd.DataFrame],
     interval: str,
@@ -228,7 +261,22 @@ class DataClient:
             target_mean_price=info.get("targetMeanPrice"),
             recommendation_key=info.get("recommendationKey"),
             current_price=info.get("currentPrice"),
+            days_to_earnings=self._fetch_days_to_earnings(symbol, ticker, warnings),
         )
+
+    def _fetch_days_to_earnings(
+        self, symbol: str, ticker: Any, warnings: list[str]
+    ) -> Optional[int]:
+        if ticker is None:
+            return None
+        try:
+            calendar = ticker.calendar
+        except Exception:
+            logger.warning("%s earnings calendar unavailable.", symbol, exc_info=True)
+            warnings.append(f"{symbol} 财报日历不可用")
+            return None
+        today = datetime.now(tz=US_EASTERN_TZ).date()
+        return days_to_next_earnings(calendar, today)
 
     def fetch_options(self, symbol: str, ticker: Any, warnings: list[str]) -> Optional[OptionsData]:
         if ticker is None:

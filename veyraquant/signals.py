@@ -117,6 +117,19 @@ def analyze_symbol(
         risks.extend(data_quality.reasons[:3])
         suppressed_by.append("data_quality_gate")
         action = "WAIT"
+    blackout_days = getattr(config, "earnings_blackout_days", 3)
+    days_to_earnings = getattr(fundamentals, "days_to_earnings", None)
+    if (
+        action in ACTIONABLE_ACTIONS
+        and days_to_earnings is not None
+        and 0 <= days_to_earnings <= blackout_days
+    ):
+        risks.append(
+            f"Earnings expected in {days_to_earnings} day(s); "
+            "new entries are blocked inside the earnings blackout window."
+        )
+        suppressed_by.append("earnings_blackout")
+        action = "WATCH"
     if action in ACTIONABLE_ACTIONS:
         preview_plan = preview_trade_plan(action, tech, config)
         if preview_plan.rr < config.min_rr and preview_plan.position_pct > 0:

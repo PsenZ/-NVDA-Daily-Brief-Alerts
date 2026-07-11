@@ -154,3 +154,19 @@ def test_trim_handles_empty_and_unknown_interval():
     )
     # Unknown interval string: be conservative and keep the data untouched.
     assert len(trim_incomplete_bars(frame, "weird", now_et=now)) == 1
+
+
+def test_days_to_next_earnings_parses_dict_calendar():
+    from datetime import date
+    from veyraquant.data import days_to_next_earnings
+
+    today = date(2026, 7, 10)
+    calendar = {"Earnings Date": [date(2026, 7, 13), date(2026, 7, 15)]}
+    assert days_to_next_earnings(calendar, today) == 3
+
+    # Past dates are ignored; scalar values accepted.
+    assert days_to_next_earnings({"Earnings Date": date(2026, 7, 1)}, today) is None
+    assert days_to_next_earnings({"Earnings Date": "2026-07-12"}, today) == 2
+    assert days_to_next_earnings({}, today) is None
+    assert days_to_next_earnings(None, today) is None
+    assert days_to_next_earnings({"Earnings Date": ["garbage"]}, today) is None

@@ -198,6 +198,7 @@ class AppConfig:
     price_cache_actionable_max_age_hours: float = 24.0
     price_cache_invalid_max_age_hours: float = 72.0
     data_workers: int = 4
+    earnings_blackout_days: int = 3
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -274,4 +275,5 @@ class AppConfig:
                 "PRICE_CACHE_INVALID_MAX_AGE_HOURS", 72.0
             ),
             data_workers=_int_env("DATA_WORKERS", 4),
+            earnings_blackout_days=_int_env("EARNINGS_BLACKOUT_DAYS", 3),
         )
