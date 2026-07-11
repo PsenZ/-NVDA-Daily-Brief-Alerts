@@ -2,7 +2,11 @@
 
 on:
   schedule:
-    - cron: "*/20 * * * *"
+    # Nightly full pipeline, shortly after the US close. Two offsets cover
+    # Sydney DST both ways (20:30 UTC = 7:30 AEDT, 21:30 UTC = 7:30 AEST);
+    # the already-sent-today guard dedups whichever run is the second one.
+    - cron: "30 20 * * *"
+    - cron: "30 21 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -89,11 +93,13 @@ jobs:
       - name: Commit state if updated
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: |
-          if [ -n "$(git status --porcelain state/last_sent.json)" ]; then
+          if [ -n "$(git status --porcelain state/last_sent.json state/armed_plans.json)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add state/last_sent.json
-            git commit -m "Update last_sent state"
+            git add --ignore-errors state/armed_plans.json || true
+            git commit -m "Update send state and armed plans"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
             git push
           else
             echo "No state changes to commit."

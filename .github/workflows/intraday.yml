@@ -1,0 +1,62 @@
+name: VeyraQuant Intraday Triggers
+
+on:
+  schedule:
+    # Every 10 minutes across US regular hours (13:30-20:00 UTC in EDT,
+    # 14:30-21:00 UTC in EST). Offset minutes avoid the congested :00 slots.
+    # The Python job gates precisely on 9:30-16:00 ET and exits in seconds
+    # when there are no armed plans, so off-hours runs are nearly free.
+    - cron: "4,14,24,34,44,54 13-21 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Check triggers without sending email or updating state"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: veyraquant-intraday-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check-triggers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check armed plan triggers
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          python intraday.py
+
+      - name: Commit armed plan state if updated
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          if [ -n "$(git status --porcelain state/armed_plans.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add state/armed_plans.json
+            git commit -m "Update armed plan state"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push
+          else
+            echo "No armed plan changes to commit."
+          fi
