@@ -17,7 +17,20 @@ class BacktestResult:
     buy_hold_pct: float
 
 
-def run_backtest(symbol: str, daily: pd.DataFrame, config: AppConfig) -> BacktestResult:
+def run_backtest(
+    symbol: str,
+    daily: pd.DataFrame,
+    config: AppConfig,
+    market_histories: dict[str, pd.DataFrame | None] | None = None,
+) -> BacktestResult:
+    """Backtest one symbol.
+
+    market_histories should hold real benchmark frames (e.g. SPY/QQQ/SMH/^VIX);
+    each is sliced to the walk-forward window date so the market filter sees
+    only past benchmark data. When omitted, a neutral market context is used
+    instead of the old (invalid) behavior of feeding the symbol's own prices
+    in as the benchmarks.
+    """
     if len(daily) < 90:
         return BacktestResult(0, 0.0, 0.0, 0.0, 0.0)
 
@@ -29,7 +42,9 @@ def run_backtest(symbol: str, daily: pd.DataFrame, config: AppConfig) -> Backtes
 
     for idx in range(80, len(daily) - 6):
         window = daily.iloc[: idx + 1]
-        market = build_market_context({"SPY": window, "QQQ": window, "SMH": window})
+        market = build_market_context(
+            _market_slice(market_histories, window.index[-1])
+        )
         result = analyze_symbol(
             symbol,
             window,
@@ -77,6 +92,21 @@ def run_backtest(symbol: str, daily: pd.DataFrame, config: AppConfig) -> Backtes
         max_drawdown_pct=round(max_drawdown, 2),
         buy_hold_pct=round(float(buy_hold), 2),
     )
+
+
+def _market_slice(
+    market_histories: dict[str, pd.DataFrame | None] | None,
+    as_of,
+) -> dict[str, pd.DataFrame | None]:
+    if not market_histories:
+        return {}
+    sliced: dict[str, pd.DataFrame | None] = {}
+    for name, frame in market_histories.items():
+        if frame is None or frame.empty:
+            sliced[name] = None
+            continue
+        sliced[name] = frame.loc[frame.index <= as_of]
+    return sliced
 
 
 def _money_to_float(value: str) -> float:

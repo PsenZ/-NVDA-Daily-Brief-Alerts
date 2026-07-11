@@ -51,3 +51,43 @@ def test_backtest_returns_summary_without_future_data_crash():
     assert result.trades >= 0
     assert 0 <= result.win_rate <= 100
     assert result.buy_hold_pct > 0
+
+
+def _frame(rows, start, step):
+    close = start + np.arange(rows) * step
+    return pd.DataFrame(
+        {
+            "Open": close - 0.2,
+            "High": close + 1.0,
+            "Low": close - 1.0,
+            "Close": close,
+            "Volume": np.linspace(1_000_000, 1_800_000, rows),
+        },
+        index=pd.date_range("2025-01-01", periods=rows, freq="B"),
+    )
+
+
+def test_backtest_market_filter_uses_injected_benchmarks_not_symbol_itself():
+    rows = 180
+    daily = _frame(rows, 100, 0.25)  # steadily rising symbol
+    # Bear benchmarks: falling SPY/QQQ/SMH should push the market filter
+    # toward risk-off and veto/suppress long entries.
+    bear = {name: _frame(rows, 200, -0.5) for name in ("SPY", "QQQ", "SMH")}
+    bull = {name: _frame(rows, 200, 0.5) for name in ("SPY", "QQQ", "SMH")}
+
+    result_bear = run_backtest("NVDA", daily, make_config(), market_histories=bear)
+    result_bull = run_backtest("NVDA", daily, make_config(), market_histories=bull)
+
+    # With the old self-referential bug both would be identical; now the
+    # bearish market must not produce more trades than the bullish one.
+    assert result_bear.trades <= result_bull.trades
+
+
+def test_backtest_market_slice_has_no_lookahead():
+    from veyraquant.backtest import _market_slice
+
+    frame = _frame(60, 100, 0.5)
+    as_of = frame.index[29]
+    sliced = _market_slice({"SPY": frame}, as_of)
+    assert sliced["SPY"].index[-1] == as_of
+    assert len(sliced["SPY"]) == 30

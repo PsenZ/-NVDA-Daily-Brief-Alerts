@@ -22,3 +22,10 @@ def daily_report_due(now_dt: datetime, hour: int, minute: int, window_minutes: i
 
 def is_us_market_weekday(now_dt_et: datetime) -> bool:
     return now_dt_et.weekday() < 5
+
+
+def is_regular_us_market_hours(now_dt_et: datetime) -> bool:
+    if now_dt_et.weekday() >= 5:
+        return False
+    minutes = now_dt_et.hour * 60 + now_dt_et.minute
+    return 9 * 60 + 30 <= minutes <= 16 * 60

@@ -198,6 +198,9 @@ class AppConfig:
     price_cache_actionable_max_age_hours: float = 24.0
     price_cache_invalid_max_age_hours: float = 72.0
     data_workers: int = 4
+    earnings_blackout_days: int = 3
+    armed_plans_path: str = os.path.join("state", "armed_plans.json")
+    armed_plan_valid_days: int = 2
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -274,4 +277,9 @@ class AppConfig:
                 "PRICE_CACHE_INVALID_MAX_AGE_HOURS", 72.0
             ),
             data_workers=_int_env("DATA_WORKERS", 4),
+            earnings_blackout_days=_int_env("EARNINGS_BLACKOUT_DAYS", 3),
+            armed_plans_path=os.getenv(
+                "ARMED_PLANS_PATH", os.path.join("state", "armed_plans.json")
+            ),
+            armed_plan_valid_days=_int_env("ARMED_PLAN_VALID_DAYS", 2),
         )

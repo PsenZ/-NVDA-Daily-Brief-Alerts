@@ -19,6 +19,7 @@ class FundamentalsData:
     target_mean_price: Any = None
     recommendation_key: Any = None
     current_price: Any = None
+    days_to_earnings: Optional[int] = None
 
 
 @dataclass

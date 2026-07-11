@@ -508,3 +508,86 @@ def test_reporting_can_render_non_actionable_signals_without_crashing():
     assert "why now:" in alert_body
     assert "watch risk:" in alert_body
     assert "Hold / WATCH" in alert_subject
+
+
+def test_signal_hash_stable_under_price_drift_but_changes_on_action():
+    import hashlib
+
+    from veyraquant.signals import _result
+    from veyraquant.trade_plan import _non_actionable_plan
+
+    def make(action, setup_type, entry_zone, score):
+        plan = _non_actionable_plan(
+            plan_kind="wait", entry_zone=entry_zone, trigger="t", cancel="c"
+        )
+        return _result(
+            rank=0,
+            symbol="NVDA",
+            setup_type=setup_type,
+            signal_type="x",
+            action=action,
+            is_actionable=False,
+            suppressed_by=[],
+            plan_kind="wait",
+            score=score,
+            market_regime="m",
+            plan=plan,
+            reasons=[],
+            risks=[],
+            contributions={},
+            alert_kind="wait",
+            last_price=100.0,
+        )
+
+    # Same identity, drifting price/score -> same hash (cooldown holds).
+    a = make("BUY_TRIGGER", "breakout_entry", "$100.00 - $101.00", 70)
+    b = make("BUY_TRIGGER", "breakout_entry", "$100.40 - $101.40", 73)
+    assert a.signal_hash == b.signal_hash
+
+    # A real identity change -> new hash (cooldown bypass is intentional).
+    c = make("ADD_TRIGGER", "pullback_add", "$100.00 - $101.00", 70)
+    assert c.signal_hash != a.signal_hash
+
+
+def test_earnings_blackout_suppresses_buy_inside_window(monkeypatch):
+    monkeypatch.setattr("veyraquant.signals.tech_summary", lambda _daily: breakout_snapshot())
+    monkeypatch.setattr("veyraquant.signals.intraday_snapshot", lambda _intraday: None)
+    monkeypatch.setattr("veyraquant.signals.score_components", lambda *args, **kwargs: score_result(72))
+
+    result = analyze_symbol(
+        "NVDA",
+        dummy_daily(),
+        None,
+        FundamentalsData(days_to_earnings=2),
+        None,
+        news_bundle(0.0),
+        bullish_market(),
+        make_config(),
+    )
+
+    assert result.action == "WATCH"
+    assert "earnings_blackout" in result.suppressed_by
+    assert not result.is_actionable
+    assert any("Earnings expected in 2 day" in risk for risk in result.risks)
+    assert_result_consistency(result)
+
+
+def test_earnings_outside_blackout_window_does_not_block(monkeypatch):
+    monkeypatch.setattr("veyraquant.signals.tech_summary", lambda _daily: breakout_snapshot())
+    monkeypatch.setattr("veyraquant.signals.intraday_snapshot", lambda _intraday: None)
+    monkeypatch.setattr("veyraquant.signals.score_components", lambda *args, **kwargs: score_result(72))
+
+    result = analyze_symbol(
+        "NVDA",
+        dummy_daily(),
+        None,
+        FundamentalsData(days_to_earnings=10),
+        None,
+        news_bundle(0.0),
+        bullish_market(),
+        make_config(),
+    )
+
+    assert result.action == "BUY_TRIGGER"
+    assert "earnings_blackout" not in result.suppressed_by
+    assert_result_consistency(result)

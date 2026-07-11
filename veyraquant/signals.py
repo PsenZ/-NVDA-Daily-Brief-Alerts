@@ -117,6 +117,19 @@ def analyze_symbol(
         risks.extend(data_quality.reasons[:3])
         suppressed_by.append("data_quality_gate")
         action = "WAIT"
+    blackout_days = getattr(config, "earnings_blackout_days", 3)
+    days_to_earnings = getattr(fundamentals, "days_to_earnings", None)
+    if (
+        action in ACTIONABLE_ACTIONS
+        and days_to_earnings is not None
+        and 0 <= days_to_earnings <= blackout_days
+    ):
+        risks.append(
+            f"Earnings expected in {days_to_earnings} day(s); "
+            "new entries are blocked inside the earnings blackout window."
+        )
+        suppressed_by.append("earnings_blackout")
+        action = "WATCH"
     if action in ACTIONABLE_ACTIONS:
         preview_plan = preview_trade_plan(action, tech, config)
         if preview_plan.rr < config.min_rr and preview_plan.position_pct > 0:
@@ -253,7 +266,11 @@ def _result(
     validation_warnings: Optional[list[str]] = None,
     data_quality: Optional[DataQuality] = None,
 ) -> SignalResult:
-    hash_input = f"{symbol}|{action}|{score}|{plan.entry_zone}|{plan.stop}|{plan.targets}"
+    # Identity only: symbol + action + setup. Score and price-derived plan
+    # fields drift on every data refresh, and a changed hash bypasses the
+    # alert cooldown ("signal_changed"), so including them made the cooldown
+    # ineffective exactly when the market was trending.
+    hash_input = f"{symbol}|{action}|{setup_type}"
     signal_hash = hashlib.sha1(hash_input.encode("utf-8")).hexdigest()[:12]
     return SignalResult(
         rank=rank,
