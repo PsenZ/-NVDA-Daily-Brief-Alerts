@@ -253,7 +253,11 @@ def _result(
     validation_warnings: Optional[list[str]] = None,
     data_quality: Optional[DataQuality] = None,
 ) -> SignalResult:
-    hash_input = f"{symbol}|{action}|{score}|{plan.entry_zone}|{plan.stop}|{plan.targets}"
+    # Identity only: symbol + action + setup. Score and price-derived plan
+    # fields drift on every data refresh, and a changed hash bypasses the
+    # alert cooldown ("signal_changed"), so including them made the cooldown
+    # ineffective exactly when the market was trending.
+    hash_input = f"{symbol}|{action}|{setup_type}"
     signal_hash = hashlib.sha1(hash_input.encode("utf-8")).hexdigest()[:12]
     return SignalResult(
         rank=rank,

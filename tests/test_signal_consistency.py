@@ -508,3 +508,42 @@ def test_reporting_can_render_non_actionable_signals_without_crashing():
     assert "why now:" in alert_body
     assert "watch risk:" in alert_body
     assert "Hold / WATCH" in alert_subject
+
+
+def test_signal_hash_stable_under_price_drift_but_changes_on_action():
+    import hashlib
+
+    from veyraquant.signals import _result
+    from veyraquant.trade_plan import _non_actionable_plan
+
+    def make(action, setup_type, entry_zone, score):
+        plan = _non_actionable_plan(
+            plan_kind="wait", entry_zone=entry_zone, trigger="t", cancel="c"
+        )
+        return _result(
+            rank=0,
+            symbol="NVDA",
+            setup_type=setup_type,
+            signal_type="x",
+            action=action,
+            is_actionable=False,
+            suppressed_by=[],
+            plan_kind="wait",
+            score=score,
+            market_regime="m",
+            plan=plan,
+            reasons=[],
+            risks=[],
+            contributions={},
+            alert_kind="wait",
+            last_price=100.0,
+        )
+
+    # Same identity, drifting price/score -> same hash (cooldown holds).
+    a = make("BUY_TRIGGER", "breakout_entry", "$100.00 - $101.00", 70)
+    b = make("BUY_TRIGGER", "breakout_entry", "$100.40 - $101.40", 73)
+    assert a.signal_hash == b.signal_hash
+
+    # A real identity change -> new hash (cooldown bypass is intentional).
+    c = make("ADD_TRIGGER", "pullback_add", "$100.00 - $101.00", 70)
+    assert c.signal_hash != a.signal_hash
