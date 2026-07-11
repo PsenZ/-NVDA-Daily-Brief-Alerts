@@ -1,6 +1,7 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
+from .armed_plans import build_armed_plans, load_plans, merge_plans, save_plans
 from .config import AppConfig
 from .data import DataClient
 from .decision_manager import apply_portfolio_manager
@@ -65,6 +66,8 @@ def run(config: AppConfig | None = None) -> int:
     )
     if daily_sent:
         sent_any = True
+        if not config.dry_run:
+            arm_approved_plans(results, config, now_dt)
     if daily_changed:
         changed = True
     if maybe_send_entry_alerts(state, now_dt, results, config):
@@ -133,6 +136,22 @@ def _fetch_symbol_data(client: DataClient, config: AppConfig) -> list[SymbolData
         return [fetch(symbol) for symbol in symbols]
     with ThreadPoolExecutor(max_workers=workers) as pool:
         return list(pool.map(fetch, symbols))
+
+
+def arm_approved_plans(results, config: AppConfig, now_dt) -> None:
+    """Freeze approved plans for the intraday trigger job."""
+    path = getattr(config, "armed_plans_path", None)
+    if not path:
+        return
+    today = now_dt.astimezone(US_EASTERN_TZ).date()
+    valid_days = getattr(config, "armed_plan_valid_days", 2)
+    fresh = build_armed_plans(results, today, valid_days)
+    existing = load_plans(path)
+    merged = merge_plans(existing, fresh, today)
+    if merged == existing:
+        return
+    save_plans(path, merged)
+    logger.info("Armed %d plan(s); %d total tracked.", len(fresh), len(merged))
 
 
 def build_results(symbol_data_items: list[SymbolData], market, config: AppConfig, positions=None):
