@@ -6,6 +6,10 @@ from .models import SignalResult
 
 
 BENCHMARK_SYMBOL = "SPY"
+# Outcome horizons in trading days. 5 is the primary holding assumption;
+# the others exist to test that assumption instead of hardcoding it.
+HORIZONS = (1, 3, 5, 10)
+HORIZON_RETRY_MAX_DAYS = 30
 
 
 def sync_decision_log(
@@ -61,6 +65,8 @@ def _build_entry(now_dt: datetime, result: SignalResult, holding_days: int) -> d
         "holding_days": holding_days,
         "five_day_return": None,
         "alpha_vs_spy": None,
+        "horizon_returns": {},
+        "horizon_alphas": {},
     }
 
 
@@ -70,28 +76,58 @@ def _resolve_pending(
     holding_days: int,
     fetch_return: Callable[[str, str, int], float | None],
 ) -> list[dict[str, Any]]:
-    cutoff = now_dt.date() - timedelta(days=holding_days)
+    today = now_dt.date()
+    cutoff = today - timedelta(days=holding_days)
     for entry in entries:
-        if entry.get("outcome_status") != "pending":
-            continue
+        status = entry.get("outcome_status")
         try:
             trade_date = datetime.strptime(entry["date"], "%Y-%m-%d").date()
         except Exception:
-            entry["outcome_status"] = "unresolved"
-            continue
-        if trade_date > cutoff:
-            continue
-
-        symbol_return = fetch_return(entry["symbol"], entry["date"], holding_days)
-        benchmark_return = fetch_return(BENCHMARK_SYMBOL, entry["date"], holding_days)
-        if symbol_return is None or benchmark_return is None:
-            entry["outcome_status"] = "unresolved"
+            if status == "pending":
+                entry["outcome_status"] = "unresolved"
             continue
 
-        entry["five_day_return"] = round(symbol_return, 6)
-        entry["alpha_vs_spy"] = round(symbol_return - benchmark_return, 6)
-        entry["outcome_status"] = "resolved"
+        if status == "pending":
+            if trade_date > cutoff:
+                continue
+            _fill_horizons(entry, fetch_return)
+            primary_return = entry["horizon_returns"].get(str(holding_days))
+            primary_alpha = entry["horizon_alphas"].get(str(holding_days))
+            if primary_return is None and holding_days not in HORIZONS:
+                symbol_return = fetch_return(entry["symbol"], entry["date"], holding_days)
+                benchmark_return = fetch_return(BENCHMARK_SYMBOL, entry["date"], holding_days)
+                if symbol_return is not None and benchmark_return is not None:
+                    primary_return = round(symbol_return, 6)
+                    primary_alpha = round(symbol_return - benchmark_return, 6)
+            if primary_return is None or primary_alpha is None:
+                entry["outcome_status"] = "unresolved"
+                continue
+            entry["five_day_return"] = primary_return
+            entry["alpha_vs_spy"] = primary_alpha
+            entry["outcome_status"] = "resolved"
+        elif status == "resolved" and (today - trade_date).days <= HORIZON_RETRY_MAX_DAYS:
+            # Longer horizons (e.g. 10d) are usually not observable yet when
+            # the primary horizon resolves; keep backfilling them for a while.
+            _fill_horizons(entry, fetch_return)
     return entries
+
+
+def _fill_horizons(
+    entry: dict[str, Any],
+    fetch_return: Callable[[str, str, int], float | None],
+) -> None:
+    returns = entry.setdefault("horizon_returns", {})
+    alphas = entry.setdefault("horizon_alphas", {})
+    for horizon in HORIZONS:
+        key = str(horizon)
+        if returns.get(key) is not None and alphas.get(key) is not None:
+            continue
+        symbol_return = fetch_return(entry["symbol"], entry["date"], horizon)
+        benchmark_return = fetch_return(BENCHMARK_SYMBOL, entry["date"], horizon)
+        if symbol_return is None or benchmark_return is None:
+            continue
+        returns[key] = round(symbol_return, 6)
+        alphas[key] = round(symbol_return - benchmark_return, 6)
 
 
 def _fetch_holding_return(symbol: str, trade_date: str, holding_days: int) -> float | None:
@@ -104,14 +140,17 @@ def _fetch_holding_return(symbol: str, trade_date: str, holding_days: int) -> fl
         start = datetime.strptime(trade_date, "%Y-%m-%d")
     except Exception:
         return None
-    end = start + timedelta(days=holding_days + 10)
+    end = start + timedelta(days=holding_days * 2 + 10)
     history = yf.Ticker(symbol).history(start=trade_date, end=end.strftime("%Y-%m-%d"))
-    if len(history) < 2:
+    # Strict horizon semantics: a "10-day return" must span 10 trading bars.
+    # The old min() fallback silently relabeled a shorter window, which
+    # would contaminate horizon statistics; not-enough-bars-yet -> None,
+    # and the backfill loop retries on a later run.
+    if len(history) <= holding_days:
         return None
 
-    actual_idx = min(holding_days, len(history) - 1)
     entry_price = float(history["Close"].iloc[0])
-    exit_price = float(history["Close"].iloc[actual_idx])
+    exit_price = float(history["Close"].iloc[holding_days])
     if entry_price == 0:
         return None
     return (exit_price - entry_price) / entry_price
