@@ -91,3 +91,29 @@ def test_backtest_market_slice_has_no_lookahead():
     sliced = _market_slice({"SPY": frame}, as_of)
     assert sliced["SPY"].index[-1] == as_of
     assert len(sliced["SPY"]) == 30
+
+
+def test_apply_cost_scales_with_stop_distance():
+    from veyraquant.backtest import apply_cost
+
+    # 10 bps on a $100 entry = $0.10. With $2 risk/share that is 0.05R;
+    # with $0.50 risk/share (tight stop) the same cost is 0.20R.
+    assert apply_cost(1.5, 100.0, 2.0, 10.0) == 1.5 - 0.05
+    assert apply_cost(1.5, 100.0, 0.5, 10.0) == 1.5 - 0.20
+    # Zero cost / degenerate inputs leave the outcome untouched.
+    assert apply_cost(1.5, 100.0, 2.0, 0.0) == 1.5
+    assert apply_cost(1.5, 0.0, 2.0, 10.0) == 1.5
+
+
+def test_backtest_net_avg_r_never_exceeds_gross():
+    import dataclasses
+
+    daily = _frame(180, 100, 0.25)
+    bull = {name: _frame(180, 200, 0.5) for name in ("SPY", "QQQ", "SMH")}
+    config = dataclasses.replace(make_config(), backtest_cost_bps=50.0)
+
+    result = run_backtest("NVDA", daily, config, market_histories=bull)
+
+    assert result.cost_bps == 50.0
+    if result.trades > 0:
+        assert result.avg_r <= result.avg_r_gross
