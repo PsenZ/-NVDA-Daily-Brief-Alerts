@@ -4,6 +4,8 @@ import math
 import os
 import re
 import time
+from datetime import datetime
+from datetime import time as dt_time
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import quote
@@ -13,6 +15,7 @@ import pandas as pd
 
 from .config import AppConfig
 from .models import DataQuality, FundamentalsData, NewsBundle, OptionsData, SymbolData
+from .timeutils import US_EASTERN_TZ
 
 
 logger = logging.getLogger(__name__)
@@ -92,6 +95,60 @@ def headline_sentiment_score(text: str) -> int:
 
 def safe_cache_key(symbol: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", symbol)
+
+
+US_MARKET_CLOSE = dt_time(16, 0)
+
+
+def _interval_minutes(interval: str) -> Optional[int]:
+    match = re.fullmatch(r"(\d+)([mh])", interval.strip().lower())
+    if not match:
+        return None
+    value = int(match.group(1))
+    return value * 60 if match.group(2) == "h" else value
+
+
+def _as_eastern(ts) -> Optional[pd.Timestamp]:
+    try:
+        stamp = pd.Timestamp(ts)
+    except Exception:
+        return None
+    if stamp.tzinfo is None:
+        # yfinance intraday is normally tz-aware; naive stamps are treated
+        # as already being US/Eastern rather than guessed from local time.
+        return stamp.tz_localize(US_EASTERN_TZ)
+    return stamp.tz_convert(US_EASTERN_TZ)
+
+
+def trim_incomplete_bars(
+    data: Optional[pd.DataFrame],
+    interval: str,
+    now_et: Optional[datetime] = None,
+) -> Optional[pd.DataFrame]:
+    """Drop the still-forming last bar so signals only see completed bars.
+
+    Daily bars: today's bar is incomplete until the 16:00 ET close.
+    Intraday bars: the last bar is incomplete until bar_start + interval.
+    """
+    if data is None or data.empty:
+        return data
+    now_et = now_et or datetime.now(tz=US_EASTERN_TZ)
+    last_ts = _as_eastern(data.index[-1])
+    if last_ts is None:
+        return data
+
+    if interval.strip().lower() == "1d":
+        if last_ts.date() == now_et.date() and now_et.time() < US_MARKET_CLOSE:
+            return data.iloc[:-1]
+        return data
+
+    minutes = _interval_minutes(interval)
+    if minutes is None:
+        return data
+    bar_end = last_ts + pd.Timedelta(minutes=minutes)
+    if bar_end > pd.Timestamp(now_et):
+        return data.iloc[:-1]
+    return data
 
 
 class DataClient:
@@ -282,6 +339,7 @@ class DataClient:
             try:
                 data = ticker.history(period=period, interval=interval, auto_adjust=True)
                 data = self._clean_price_frame(data)
+                data = trim_incomplete_bars(data, interval)
                 if data is not None and not data.empty:
                     data.to_csv(cache_path, encoding="utf-8")
                     self._mark_history_quality(quality, name, "live", None)
@@ -291,7 +349,7 @@ class DataClient:
                 logger.warning("%s %s history fetch failed; trying cache.", symbol, name, exc_info=True)
                 warnings.append(f"{symbol} {name} 行情不可用，尝试使用缓存: {exc}")
 
-        cached = self._read_price_cache(cache_path)
+        cached = trim_incomplete_bars(self._read_price_cache(cache_path), interval)
         if cached is None or cached.empty:
             self._mark_history_quality(quality, name, "missing", None)
             warnings.append(f"{symbol} {name} 无可用缓存")
