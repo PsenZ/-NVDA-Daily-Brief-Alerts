@@ -70,7 +70,20 @@ def run_intraday_check(
 
     if changed:
         save_plans(path, plans)
+        _mirror_to_dashboard(config, plans)
     return 0
+
+
+def _mirror_to_dashboard(config: Any, plans: list[dict[str, Any]]) -> None:
+    export_dir = getattr(config, "export_dir", "")
+    if not export_dir:
+        return
+    try:
+        from .export import export_armed_plans
+
+        export_armed_plans(export_dir, plans)
+    except Exception:
+        logger.warning("Armed-plan dashboard mirror failed.", exc_info=True)
 
 
 def evaluate_plan(plan: dict[str, Any], price: float) -> Optional[str]:

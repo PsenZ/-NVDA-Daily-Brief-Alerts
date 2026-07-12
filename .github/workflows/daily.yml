@@ -93,12 +93,12 @@ jobs:
       - name: Commit state if updated
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: |
-          if [ -n "$(git status --porcelain state/last_sent.json state/armed_plans.json)" ]; then
+          if [ -n "$(git status --porcelain state/last_sent.json state/armed_plans.json docs/data)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add state/last_sent.json
-            git add --ignore-errors state/armed_plans.json || true
-            git commit -m "Update send state and armed plans"
+            git add --ignore-errors state/armed_plans.json docs/data || true
+            git commit -m "Update send state, armed plans and dashboard data"
             git pull --rebase origin "${GITHUB_REF_NAME}"
             git push
           else

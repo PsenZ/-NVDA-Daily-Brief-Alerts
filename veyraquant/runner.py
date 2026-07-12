@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from .armed_plans import build_armed_plans, load_plans, merge_plans, save_plans
 from .config import AppConfig
 from .data import DataClient
+from .export import export_armed_plans, export_dashboard
 from .decision_manager import apply_portfolio_manager
 from .emailer import send_email
 from .market import build_market_context
@@ -68,6 +69,9 @@ def run(config: AppConfig | None = None) -> int:
         sent_any = True
         if not config.dry_run:
             arm_approved_plans(results, config, now_dt)
+            export_dashboard(
+                results, market, config, now_dt, portfolio_notes, review_notes
+            )
     if daily_changed:
         changed = True
     if maybe_send_entry_alerts(state, now_dt, results, config):
@@ -152,6 +156,12 @@ def arm_approved_plans(results, config: AppConfig, now_dt) -> None:
         return
     save_plans(path, merged)
     logger.info("Armed %d plan(s); %d total tracked.", len(fresh), len(merged))
+    export_dir = getattr(config, "export_dir", "")
+    if export_dir:
+        try:
+            export_armed_plans(export_dir, merged)
+        except Exception:
+            logger.warning("Armed-plan dashboard mirror failed.", exc_info=True)
 
 
 def build_results(symbol_data_items: list[SymbolData], market, config: AppConfig, positions=None):
