@@ -38,6 +38,10 @@ class TradeSignal:
     target_price: float
     risk_pct: float          # requested account risk for this trade
     score: float = 0.0       # priority when several signals compete for heat
+    # Action semantics (R5.5): "" or BUY_TRIGGER opens a fresh position and
+    # is blocked while one is open; ADD_TRIGGER requires an open position.
+    action: str = ""
+    portfolio_decision: str = ""
     # Attribution tags (R5): carried through to SimTrade for grouping.
     setup_type: str = ""
     market_regime: str = ""
@@ -83,6 +87,8 @@ class EventBacktestResult:
     cost_bps: float = 0.0
     skipped_for_heat: int = 0
     cancelled_entries: int = 0
+    skipped_duplicate: int = 0   # BUY while a position was already open
+    invalid_adds: int = 0        # ADD with no open position to add to
 
 
 def run_event_backtest(
@@ -118,9 +124,14 @@ def run_event_backtest(
     curve: list[tuple[Any, float]] = []
     skipped_for_heat = 0
     cancelled = 0
+    skipped_duplicate = 0
+    invalid_adds = 0
 
     def heat_in_use() -> float:
         return sum(trade.risk_pct for trade in open_trades)
+
+    def symbol_is_open(symbol: str) -> bool:
+        return any(trade.symbol == symbol for trade in open_trades)
 
     for ts in timeline:
         # ---- exits first: release heat before new entries compete for it
@@ -174,6 +185,15 @@ def run_event_backtest(
 
         for signal in candidates:
             pending[signal.symbol].remove(signal)
+            # Position semantics (R5.5): a fresh BUY never doubles up on an
+            # open position; an ADD is only real when there IS a position.
+            if signal.action == "ADD_TRIGGER":
+                if not symbol_is_open(signal.symbol):
+                    invalid_adds += 1
+                    continue
+            elif symbol_is_open(signal.symbol):
+                skipped_duplicate += 1
+                continue
             frame = frames[signal.symbol]
             bar = frame.iloc[signal.signal_idx + 1]
             open_px = float(bar["Open"]) * (1 + slip)
@@ -234,8 +254,28 @@ def run_event_backtest(
             unrealized += (last_close - trade.entry_price) * trade.shares
         curve.append((ts, realized_equity + unrealized))
 
+    # End-of-test liquidation (R5.5): open positions do not vanish - they
+    # are closed at their symbol's last available close so their P&L and
+    # costs are real, and the final equity matches the equity curve.
+    for trade in open_trades:
+        frame = frames[trade.symbol]
+        fill = float(frame.iloc[-1]["Close"]) * (1 - slip)
+        risk_per_share = trade.entry_price - trade.stop_price
+        trade.exit_date = frame.index[-1]
+        trade.exit_price = fill
+        trade.exit_reason = "end_of_test"
+        trade.r_gross = (fill - trade.entry_price) / risk_per_share
+        trade.r_net = apply_cost(trade.r_gross, trade.entry_price, risk_per_share, cost_bps)
+        cost_amount = (trade.r_gross - trade.r_net) * risk_per_share * trade.shares
+        trade.pnl = (fill - trade.entry_price) * trade.shares - cost_amount
+        realized_equity += trade.pnl
+        closed.append(trade)
+    open_trades = []
+    if curve:
+        curve[-1] = (curve[-1][0], realized_equity)
+
     return _summarize(closed, curve, starting_equity, realized_equity, cost_bps,
-                      skipped_for_heat, cancelled)
+                      skipped_for_heat, cancelled, skipped_duplicate, invalid_adds)
 
 
 def signals_from_pipeline(
@@ -285,6 +325,7 @@ def signals_from_pipeline(
                 target_price=float(plan.target1),
                 risk_pct=float(getattr(config, "risk_per_trade_pct", 0.5)),
                 score=float(result.score),
+                action=getattr(result, "action", ""),
                 setup_type=result.setup_type,
                 market_regime=result.market_regime,
                 sector=result.sector_bucket or prof.sector,
@@ -302,6 +343,8 @@ def _summarize(
     cost_bps: float,
     skipped_for_heat: int,
     cancelled: int,
+    skipped_duplicate: int = 0,
+    invalid_adds: int = 0,
 ) -> EventBacktestResult:
     peak = starting_equity
     max_dd = 0.0
@@ -323,4 +366,6 @@ def _summarize(
         cost_bps=cost_bps,
         skipped_for_heat=skipped_for_heat,
         cancelled_entries=cancelled,
+        skipped_duplicate=skipped_duplicate,
+        invalid_adds=invalid_adds,
     )

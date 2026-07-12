@@ -241,3 +241,56 @@ def test_engine_propagates_attribution_tags_to_trades():
     assert (trade.setup_type, trade.market_regime, trade.sector, trade.data_quality) == (
         "pullback_add", "neutral", "mega_growth", "MEDIUM",
     )
+
+
+# --- R5.5: validation fidelity ---
+
+def test_open_positions_liquidate_at_end_of_test():
+    rows = [
+        (100, 101, 99, 100),
+        (100, 101, 99, 100),   # entry at 100
+        (104, 105, 103, 104),
+        (106, 107, 105, 106),  # last bar: liquidation at close 106
+    ]
+    result = run_event_backtest(
+        {"AAA": frame(rows)}, [sig(target=999.0)], make_config(), holding_bars=99
+    )
+    assert len(result.trades) == 1               # the position did not vanish
+    trade = result.trades[0]
+    assert trade.exit_reason == "end_of_test"
+    assert trade.exit_price == 106.0
+    assert trade.r_net == 1.2                    # (106-100)/5
+    assert result.final_equity - result.starting_equity == sum(t.pnl for t in result.trades)
+    assert result.equity_curve[-1][1] == result.final_equity
+
+
+def test_duplicate_buy_on_open_position_is_skipped():
+    rows = [(100, 101, 99, 100)] * 6
+    signals = [
+        TradeSignal("AAA", 0, 95.0, 999.0, 1.0, 90, action="BUY_TRIGGER"),
+        TradeSignal("AAA", 2, 95.0, 999.0, 1.0, 80, action="BUY_TRIGGER"),  # while open
+    ]
+    result = run_event_backtest({"AAA": frame(rows)}, signals, make_config(), holding_bars=99)
+    assert len(result.trades) == 1
+    assert result.skipped_duplicate == 1
+
+
+def test_add_requires_an_open_position():
+    rows = [(100, 101, 99, 100)] * 6
+    # ADD with no position: must not fake-execute as a fresh buy.
+    lonely_add = [TradeSignal("AAA", 0, 95.0, 999.0, 1.0, 90, action="ADD_TRIGGER")]
+    result = run_event_backtest({"AAA": frame(rows)}, lonely_add, make_config())
+    assert result.trades == [] or all(t.exit_reason == "" for t in result.trades)
+    assert len([t for t in result.trades]) == 0
+    assert result.invalid_adds == 1
+
+    # ADD with a position: a deliberate second tranche is allowed.
+    buy_then_add = [
+        TradeSignal("AAA", 0, 95.0, 999.0, 1.0, 90, action="BUY_TRIGGER"),
+        TradeSignal("AAA", 2, 95.0, 999.0, 1.0, 80, action="ADD_TRIGGER"),
+    ]
+    result = run_event_backtest(
+        {"AAA": frame(rows)}, buy_then_add, make_config(), holding_bars=99
+    )
+    assert len(result.trades) == 2
+    assert result.invalid_adds == 0 and result.skipped_duplicate == 0
