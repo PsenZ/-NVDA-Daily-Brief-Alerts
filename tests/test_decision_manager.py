@@ -273,3 +273,95 @@ def test_approved_heat_never_exceeds_cap_and_order_is_input_invariant():
         item.max_loss_pct for item in forward if item.portfolio_decision == "approved"
     )
     assert approved_heat <= 1.5 + 1e-9
+
+
+# --- R7 lite: correlation-aware sizing ---
+
+def test_high_correlation_with_approved_name_halves_the_size():
+    market = MarketContext("risk-on", 18.0, ["QQQ strong"], [], {})
+    config = make_config(
+        sector_risk_limits={"semiconductor": 3.0, "general": 3.0},
+        portfolio_heat_max_pct=3.0, corr_threshold=0.85, corr_haircut_factor=0.5,
+    )
+    results = [
+        make_result("NVDA", "BUY_TRIGGER", 90, "high", position_pct=6.0, max_loss_pct=0.6),
+        make_result("AMD", "BUY_TRIGGER", 82, "medium", position_pct=6.0, max_loss_pct=0.6),
+    ]
+    correlations = {frozenset(("NVDA", "AMD")): 0.93}
+
+    reviewed, notes = apply_portfolio_manager(results, market, config, correlations=correlations)
+
+    nvda = next(r for r in reviewed if r.symbol == "NVDA")
+    amd = next(r for r in reviewed if r.symbol == "AMD")
+    assert nvda.max_loss_pct == 0.6                       # first approval untouched
+    assert amd.portfolio_decision == "approved"
+    assert amd.approval_reason_code == "correlation_haircut"
+    assert abs(amd.max_loss_pct - 0.3) < 1e-9             # halved
+    assert abs(amd.position_pct - 3.0) < 1e-9
+    assert amd.trade_plan.max_loss_pct == amd.max_loss_pct
+    assert any("correlation" in note for note in notes)
+
+
+def test_correlation_below_threshold_or_absent_changes_nothing():
+    market = MarketContext("risk-on", 18.0, ["QQQ strong"], [], {})
+    config = make_config(sector_risk_limits={"semiconductor": 3.0, "general": 3.0})
+    def build():
+        return [
+            make_result("NVDA", "BUY_TRIGGER", 90, "high", max_loss_pct=0.6),
+            make_result("AMD", "BUY_TRIGGER", 82, "medium", max_loss_pct=0.6),
+        ]
+
+    low_corr, _ = apply_portfolio_manager(
+        build(), market, config, correlations={frozenset(("NVDA", "AMD")): 0.4}
+    )
+    none_corr, _ = apply_portfolio_manager(build(), market, config)
+
+    for reviewed in (low_corr, none_corr):
+        amd = next(r for r in reviewed if r.symbol == "AMD")
+        assert amd.max_loss_pct == 0.6
+        assert amd.approval_reason_code == "approved_clean"
+
+
+def test_correlation_haircut_composes_with_heat_cap():
+    market = MarketContext("risk-on", 18.0, ["QQQ strong"], [], {})
+    config = make_config(
+        sector_risk_limits={"semiconductor": 3.0, "general": 3.0},
+        portfolio_heat_max_pct=0.8, corr_threshold=0.85, corr_haircut_factor=0.5,
+    )
+    results = [
+        make_result("NVDA", "BUY_TRIGGER", 90, "high", max_loss_pct=0.6),
+        make_result("AMD", "BUY_TRIGGER", 82, "medium", max_loss_pct=0.6),
+    ]
+    reviewed, _ = apply_portfolio_manager(
+        results, market, config, correlations={frozenset(("NVDA", "AMD")): 0.95}
+    )
+    amd = next(r for r in reviewed if r.symbol == "AMD")
+    # corr halves 0.6 -> 0.3; remaining heat is 0.2 -> heat haircut wins the label.
+    assert amd.approval_reason_code == "portfolio_heat_haircut"
+    assert amd.max_loss_pct <= 0.2 + 1e-9
+    approved_heat = sum(r.max_loss_pct for r in reviewed if r.portfolio_decision == "approved")
+    assert approved_heat <= 0.8 + 1e-9
+
+
+def test_runner_correlation_helper_detects_comovement():
+    import numpy as np
+    import pandas as pd
+    from types import SimpleNamespace as NS
+    from veyraquant.runner import _candidate_correlations
+
+    idx = pd.date_range("2026-01-01", periods=80, freq="B")
+    rng = np.random.default_rng(5)
+    base = rng.normal(0, 1, 80).cumsum() + 100
+    twin = base * 1.001 + rng.normal(0, 0.05, 80)         # near-perfect co-mover
+    unrelated = rng.normal(0, 1, 80).cumsum() + 100
+
+    def item(sym, series):
+        return NS(symbol=sym, daily=pd.DataFrame({"Close": series}, index=idx))
+
+    results = [NS(symbol=s, is_actionable=True) for s in ("AAA", "BBB", "CCC")]
+    correlations = _candidate_correlations(
+        [item("AAA", base), item("BBB", twin), item("CCC", unrelated)],
+        results, NS(corr_lookback_days=60),
+    )
+    assert correlations[frozenset(("AAA", "BBB"))] > 0.95
+    assert abs(correlations[frozenset(("AAA", "CCC"))]) < 0.5

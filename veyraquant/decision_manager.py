@@ -14,7 +14,10 @@ CONVICTION_WEIGHT = {"high": 3, "medium": 2, "low": 1}
 
 
 def apply_portfolio_manager(
-    results: list[SignalResult], market: MarketContext, config: Any | None = None
+    results: list[SignalResult],
+    market: MarketContext,
+    config: Any | None = None,
+    correlations: dict[frozenset, float] | None = None,
 ) -> tuple[list[SignalResult], list[str]]:
     notes: list[str] = []
     sector_map = _config_dict(config, "sector_map", DEFAULT_SECTOR_MAP)
@@ -25,10 +28,13 @@ def apply_portfolio_manager(
     market_bucket = _market_bucket(market)
     approved_limit = _approved_limit(config, market_bucket)
     heat_cap = _heat_cap(config)
+    corr_threshold = float(getattr(config, "corr_threshold", 0.85) or 0.85)
+    corr_factor = float(getattr(config, "corr_haircut_factor", 0.5) or 0.5)
     sector_risk_used: dict[str, float] = defaultdict(float)
     sector_position_used: dict[str, float] = defaultdict(float)
     heat_used = 0.0
     approved_count = 0
+    approved_symbols: list[str] = []
 
     for result in results:
         # Explicit sector_map wins; else the registry sector pre-filled by
@@ -118,6 +124,29 @@ def apply_portfolio_manager(
             result.sector_position_after = next_sector_position
             continue
 
+        # R7 lite: correlation-aware sizing. A candidate that is highly
+        # correlated with an already-approved name is largely the same bet;
+        # scale it down BEFORE heat allocation so diversification is real.
+        corr_haircut_applied = False
+        max_corr = _max_corr_to_approved(result.symbol, approved_symbols, correlations)
+        if max_corr is not None and max_corr >= corr_threshold and 0 < corr_factor < 1:
+            _scale_sizes(
+                result,
+                round(result.position_pct * corr_factor, 2),
+                round(result.max_loss_pct * corr_factor, 2),
+            )
+            warning = (
+                f"High correlation ({max_corr:.2f}) with an approved name; "
+                "size reduced to avoid doubling the same bet."
+            )
+            result.risks.append(warning)
+            result.portfolio_warnings.append(warning)
+            corr_haircut_applied = True
+            notes.append(
+                f"{result.symbol} sized down: correlation {max_corr:.2f} with "
+                f"approved names >= {corr_threshold:.2f}."
+            )
+
         # Global portfolio heat is allocated HERE, after every approval
         # check has passed, so deferred candidates never consume it.
         heat_left = heat_cap - heat_used
@@ -147,6 +176,8 @@ def apply_portfolio_manager(
         result.portfolio_decision = "approved"
         if haircut_applied:
             result.approval_reason_code = "portfolio_heat_haircut"
+        elif corr_haircut_applied:
+            result.approval_reason_code = "correlation_haircut"
         elif result.validation_warnings:
             result.approval_reason_code = "approved_with_validation_warning"
         else:
@@ -158,6 +189,7 @@ def apply_portfolio_manager(
         sector_position_used[sector] = next_sector_position
         heat_used = budget_after(heat_used, result.max_loss_pct)
         approved_count += 1
+        approved_symbols.append(result.symbol)
 
     if market_bucket == "risk_off":
         notes.append(f"Risk-off market regime caps approved trades to {approved_limit}.")
@@ -175,15 +207,8 @@ def _heat_cap(config: Any | None) -> float:
         return 3.0
 
 
-def _haircut_for_heat(result: SignalResult, heat_left: float) -> None:
-    """Proportionally shrink the position so max loss fits the remaining
-    global heat. Floor-rounded so approved heat can never exceed the cap."""
-    ratio = heat_left / result.max_loss_pct
-    new_loss = math.floor(heat_left * 100) / 100
-    new_position = round(result.position_pct * ratio, 2)
-    warning = "Portfolio heat is tight, so the suggested position has been trimmed."
-    result.risks.append(warning)
-    result.portfolio_warnings.append(warning)
+def _scale_sizes(result: SignalResult, new_position: float, new_loss: float) -> None:
+    """Apply a size change consistently across result and trade plan."""
     result.position_pct = new_position
     result.max_loss_pct = new_loss
     result.trade_plan.position_pct = new_position
@@ -193,6 +218,33 @@ def _haircut_for_heat(result: SignalResult, heat_left: float) -> None:
             result.trade_plan.account_equity * new_position / 100
         )
     refresh_signal_result(result)
+
+
+def _haircut_for_heat(result: SignalResult, heat_left: float) -> None:
+    """Proportionally shrink the position so max loss fits the remaining
+    global heat. Floor-rounded so approved heat can never exceed the cap."""
+    ratio = heat_left / result.max_loss_pct
+    new_loss = math.floor(heat_left * 100) / 100
+    new_position = round(result.position_pct * ratio, 2)
+    warning = "Portfolio heat is tight, so the suggested position has been trimmed."
+    result.risks.append(warning)
+    result.portfolio_warnings.append(warning)
+    _scale_sizes(result, new_position, new_loss)
+
+
+def _max_corr_to_approved(
+    symbol: str,
+    approved_symbols: list[str],
+    correlations: dict[frozenset, float] | None,
+) -> float | None:
+    if not correlations or not approved_symbols:
+        return None
+    values = [
+        correlations[key]
+        for other in approved_symbols
+        if (key := frozenset((symbol, other))) in correlations
+    ]
+    return max(values) if values else None
 
 
 def _candidate_rank_score(result: SignalResult) -> float:

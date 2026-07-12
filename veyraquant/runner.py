@@ -206,12 +206,49 @@ def build_results(symbol_data_items: list[SymbolData], market, config: AppConfig
         for item in symbol_data_items
     ]
     ranked = assign_ranks(results)
+    correlations = _candidate_correlations(symbol_data_items, ranked, config)
     # Portfolio heat is allocated inside apply_portfolio_manager AFTER the
     # approval checks (R3.5): pre-allocating it here let candidates that
     # were later deferred shrink the positions of candidates that were
     # ultimately approved.
-    reviewed, portfolio_notes = apply_portfolio_manager(ranked, market, config)
+    reviewed, portfolio_notes = apply_portfolio_manager(
+        ranked, market, config, correlations=correlations
+    )
     return apply_position_context(reviewed, positions or {}), portfolio_notes
+
+
+def _candidate_correlations(symbol_data_items, results, config) -> dict | None:
+    """Pairwise return correlations among actionable candidates (R7 lite).
+
+    Best-effort: any failure or thin data yields None and the manager
+    simply skips correlation-aware sizing."""
+    try:
+        import pandas as pd
+
+        lookback = int(getattr(config, "corr_lookback_days", 60) or 60)
+        actionable = {r.symbol for r in results if getattr(r, "is_actionable", False)}
+        closes = {
+            item.symbol: item.daily["Close"]
+            for item in symbol_data_items
+            if item.symbol in actionable
+            and item.daily is not None
+            and len(item.daily) >= max(20, lookback // 2)
+        }
+        if len(closes) < 2:
+            return None
+        returns = pd.DataFrame(closes).pct_change().tail(lookback)
+        matrix = returns.corr()
+        correlations: dict[frozenset, float] = {}
+        symbols = list(matrix.columns)
+        for i, a in enumerate(symbols):
+            for b in symbols[i + 1:]:
+                value = matrix.loc[a, b]
+                if value == value:  # not NaN
+                    correlations[frozenset((a, b))] = float(value)
+        return correlations or None
+    except Exception:
+        logger.warning("Candidate correlation computation failed.", exc_info=True)
+        return None
 
 
 def maybe_send_daily_report(
