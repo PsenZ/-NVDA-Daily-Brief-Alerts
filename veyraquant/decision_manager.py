@@ -27,7 +27,11 @@ def apply_portfolio_manager(
     approved_count = 0
 
     for result in results:
-        result.sector_bucket = _sector_for_symbol(result.symbol, sector_map)
+        # Explicit sector_map wins; else the registry sector pre-filled by
+        # analyze_symbol; else the general bucket.
+        result.sector_bucket = (
+            sector_map.get(result.symbol.upper()) or result.sector_bucket or "general"
+        )
         result.approval_rank_score = _candidate_rank_score(result)
         result.approval_reason_code = ""
         result.defer_reason_code = ""
@@ -162,10 +166,6 @@ def _market_bucket(market: MarketContext) -> str:
     if market.score >= 10:
         return "risk_on"
     return "neutral"
-
-
-def _sector_for_symbol(symbol: str, sector_map: dict[str, str]) -> str:
-    return sector_map.get(symbol.upper(), "general")
 
 
 def _limit_for_sector(sector: str, limits: dict[str, float]) -> float | None:

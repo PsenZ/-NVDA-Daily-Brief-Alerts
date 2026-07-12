@@ -5,6 +5,7 @@ import numpy as np
 
 from .config import StrategyConfig
 from .constants import MARKET_RISK_OFF, MARKET_RISK_ON
+from .instruments import InstrumentProfile, default_profile
 from .models import FundamentalsData, MarketContext, NewsBundle, OptionsData, TechSnapshot
 
 
@@ -17,8 +18,10 @@ def score_components(
     market: MarketContext,
     social_sentiment_threshold: float = 0.15,
     strategy: Optional[StrategyConfig] = None,
+    profile: Optional[InstrumentProfile] = None,
 ) -> tuple[dict[str, float], list[str], list[str]]:
     s = strategy or StrategyConfig()
+    profile = profile or default_profile(symbol)
     t = tech.values
     contributions: dict[str, float] = {}
     reasons: list[str] = []
@@ -144,14 +147,18 @@ def score_components(
     contributions["discipline"] = discipline
 
     sector = 0.0
-    smh_perf = _snapshot_perf(market, "SMH")
-    qqq_perf = _snapshot_perf(market, "QQQ")
-    if symbol in {"NVDA", "AMD", "MU", "SMH"} and not math.isnan(smh_perf) and smh_perf > 0:
-        sector += 4
-        reasons.append("SMH sector strength is supporting semiconductor follow-through.")
-    if symbol in {"NVDA", "TSLA", "AAPL", "QQQ", "MSFT"} and not math.isnan(qqq_perf) and qqq_perf > 0:
-        sector += 3
-        reasons.append("QQQ remains constructive, which helps growth exposure.")
+    if profile.sector_benchmark:
+        bench_perf = _snapshot_perf(market, profile.sector_benchmark)
+        if not math.isnan(bench_perf) and bench_perf > 0:
+            sector += 4
+            reasons.append(
+                f"{profile.sector_benchmark} sector strength is supporting follow-through."
+            )
+    if profile.qqq_sensitive:
+        qqq_perf = _snapshot_perf(market, "QQQ")
+        if not math.isnan(qqq_perf) and qqq_perf > 0:
+            sector += 3
+            reasons.append("QQQ remains constructive, which helps growth exposure.")
     contributions["sector_resonance"] = sector
 
     event_risk = 0.0
