@@ -203,6 +203,7 @@ class AppConfig:
     armed_plan_valid_days: int = 2
     backtest_cost_bps: float = 10.0
     export_dir: str = os.path.join("docs", "data")
+    instruments_path: str = os.path.join("config", "instruments.json")
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -286,4 +287,7 @@ class AppConfig:
             armed_plan_valid_days=_int_env("ARMED_PLAN_VALID_DAYS", 2),
             backtest_cost_bps=_float_env("BACKTEST_COST_BPS", 10.0),
             export_dir=os.getenv("EXPORT_DIR", os.path.join("docs", "data")),
+            instruments_path=os.getenv(
+                "INSTRUMENTS_PATH", os.path.join("config", "instruments.json")
+            ),
         )

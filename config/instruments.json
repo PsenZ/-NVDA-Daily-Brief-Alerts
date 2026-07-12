@@ -1,0 +1,3 @@
+{
+  "_comment": "Per-ticker overrides merged over the built-in registry. Allowed fields: asset_type (stock|etf|index|crypto), sector, sector_benchmark, qqq_sensitive, has_options, has_fundamentals, is_leveraged, is_inverse, is_adr, min_history_bars, min_avg_dollar_volume."
+}
