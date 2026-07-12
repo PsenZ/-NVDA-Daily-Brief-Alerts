@@ -324,3 +324,79 @@ def test_fundamentals_cache_roundtrips_fetched_at(tmp_path, monkeypatch):
     legacy_path.write_text('{"marketCap": 5}', encoding="utf-8")
     legacy = client.fetch_fundamentals("OLD", None, [])
     assert legacy.fetched_at is None and legacy.market_cap == 5
+
+
+# --- R3.5.1: correlated sector-context cap ---
+
+def _cap_run(symbol, perf20, snapshots, strategy=None):
+    from veyraquant.models import MarketContext
+
+    market = MarketContext("risk-on", 10.0, ["x"], [], snapshots)
+    return score_components(
+        symbol, full_snapshot(perf20=perf20), FundamentalsData(), None,
+        NewsBundle([], [], {"score": 0.0, "label": "x", "sample_size": 0}),
+        market, strategy=strategy,
+    )
+
+
+FULL_STACK = {"SPY": {"perf20": 2.0}, "QQQ": {"perf20": 3.0}, "SMH": {"perf20": 4.0}}
+
+
+def test_cap_leaves_totals_within_limit_untouched():
+    # sector RS +6, resonance +4 (no QQQ snapshot) -> total 10, no cut.
+    snaps = {"SPY": {"perf20": 2.0}, "SMH": {"perf20": 4.0}}
+    contributions, _r, _k, evidence = _cap_run("NVDA", 10.0, snaps)
+    assert contributions["relative_strength_sector"] == 6
+    assert contributions["sector_resonance"] == 4
+    assert not any(i.code == "SECTOR_CONTEXT_CAP_APPLIED" for i in evidence)
+
+
+def test_cap_trims_resonance_first_and_totals_hit_cap_exactly():
+    # sector RS +6, resonance +7 -> 13, cap 10 -> resonance trimmed to 4.
+    contributions, _r, _k, evidence = _cap_run("NVDA", 10.0, FULL_STACK)
+    assert contributions["relative_strength_sector"] == 6   # alpha signal intact
+    assert contributions["sector_resonance"] == 4           # tailwinds absorbed the cut
+    cap_items = [i for i in evidence if i.code == "SECTOR_CONTEXT_CAP_APPLIED"]
+    assert len(cap_items) == 1
+    assert cap_items[0].points == -3
+    assert cap_items[0].value == 13 and cap_items[0].threshold == 10.0
+
+
+def test_negative_sector_rs_is_never_offset_by_the_cap():
+    # sector RS -6 (lagging), resonance +7 -> net +1, no capping involved.
+    contributions, _r, _k, evidence = _cap_run("AMD", -8.0, FULL_STACK)
+    # AMD: perf -8 vs SMH +4 -> spread -12 -> RS -6; resonance bench-only +4.
+    assert contributions["relative_strength_sector"] == -6
+    assert contributions["sector_resonance"] == 4
+    assert not any(i.code == "SECTOR_CONTEXT_CAP_APPLIED" for i in evidence)
+
+
+def test_cap_is_configurable_and_can_trim_into_sector_rs():
+    from veyraquant.config import StrategyConfig
+
+    strict = StrategyConfig(score_sector_context_cap=4.0)
+    contributions, _r, _k, evidence = _cap_run("NVDA", 10.0, FULL_STACK, strategy=strict)
+    # 13 -> cap 4: resonance 7 fully cut, residual 2 comes off sector RS.
+    assert contributions["sector_resonance"] == 0
+    assert contributions["relative_strength_sector"] == 4
+    cap_items = [i for i in evidence if i.code == "SECTOR_CONTEXT_CAP_APPLIED"]
+    assert {i.component for i in cap_items} == {"sector_resonance", "relative_strength_sector"}
+
+
+def test_cap_does_not_touch_broad_rs_or_unrelated_symbols():
+    contributions, _r, _k, _e = _cap_run("NVDA", 10.0, FULL_STACK)
+    assert contributions["relative_strength_broad"] == 6    # broad RS untouched
+
+    zzz, _r2, _k2, evidence2 = _cap_run("ZZZZ", 10.0, FULL_STACK)
+    assert zzz["sector_resonance"] == 0                     # no benchmark, no tailwind
+    assert not any(i.code == "SECTOR_CONTEXT_CAP_APPLIED" for i in evidence2)
+
+
+def test_capped_run_keeps_points_contribution_invariant():
+    contributions, _r, _k, evidence = _cap_run("NVDA", 10.0, FULL_STACK)
+    sums = defaultdict(float)
+    for item in evidence:
+        if item.points is not None:
+            sums[item.component] += item.points
+    for component, value in contributions.items():
+        assert abs(sums[component] - value) < 1e-9

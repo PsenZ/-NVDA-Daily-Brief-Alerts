@@ -1,6 +1,6 @@
 ﻿import os
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Optional
 
 
@@ -123,6 +123,21 @@ class StrategyConfig:
     score_vol_ratio_moderate: float = 1.1
     score_vol_ratio_light: float = 0.7
     score_dist_ma5_extended_pct: float = 5.0
+    # Cap on the combined POSITIVE sector context (relative_strength_sector
+    # + sector_resonance): the three sector/growth signals are financially
+    # distinct but highly correlated, and uncapped they stack to +13 for
+    # semis/growth names. Negative sector RS is never offset by the cap.
+    score_sector_context_cap: float = 10.0
+
+
+def _strategy_env_overrides(strategy: StrategyConfig) -> StrategyConfig:
+    raw = os.getenv("SCORE_SECTOR_CONTEXT_CAP")
+    if raw is None or raw.strip() == "":
+        return strategy
+    try:
+        return replace(strategy, score_sector_context_cap=float(raw))
+    except Exception:
+        return strategy
 
 
 def _load_strategy_config(path: str) -> StrategyConfig:
@@ -262,7 +277,7 @@ class AppConfig:
             decision_memory_holding_days=_int_env("DECISION_MEMORY_HOLDING_DAYS", 5),
             positions_path=os.getenv("POSITIONS_PATH", os.path.join("state", "positions.json")),
             strategy_config_path=strategy_config_path,
-            strategy=_load_strategy_config(strategy_config_path),
+            strategy=_strategy_env_overrides(_load_strategy_config(strategy_config_path)),
             sector_map=_str_dict_env("SECTOR_MAP_JSON", DEFAULT_SECTOR_MAP),
             sector_risk_limits=_float_dict_env(
                 "SECTOR_RISK_LIMITS_JSON", DEFAULT_SECTOR_RISK_LIMITS

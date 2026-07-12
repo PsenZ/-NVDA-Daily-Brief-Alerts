@@ -69,19 +69,25 @@ class EvidenceCollector:
         self._risks: list[str] = []
 
     def reason(self, code: str, text: str, component: str, points: float | None = None,
-               source: str = "technical", value: Any = None) -> None:
+               source: str = "technical", value: Any = None, threshold: Any = None) -> None:
         self._reasons.append(text)
-        self.items.append(EvidenceItem(code, text, "reason", component, points, source, value))
+        self.items.append(
+            EvidenceItem(code, text, "reason", component, points, source, value, threshold=threshold)
+        )
 
     def risk(self, code: str, text: str, component: str, points: float | None = None,
-             source: str = "technical", value: Any = None) -> None:
+             source: str = "technical", value: Any = None, threshold: Any = None) -> None:
         self._risks.append(text)
-        self.items.append(EvidenceItem(code, text, "risk", component, points, source, value))
+        self.items.append(
+            EvidenceItem(code, text, "risk", component, points, source, value, threshold=threshold)
+        )
 
     def info(self, code: str, text: str, component: str, points: float | None = None,
-             source: str = "technical", value: Any = None) -> None:
+             source: str = "technical", value: Any = None, threshold: Any = None) -> None:
         # Carries points without adding narrative to the report.
-        self.items.append(EvidenceItem(code, text, "info", component, points, source, value))
+        self.items.append(
+            EvidenceItem(code, text, "info", component, points, source, value, threshold=threshold)
+        )
 
     @property
     def reasons(self) -> list[str]:
@@ -143,7 +149,7 @@ SCORING_CODES = {
     "OPT_PC_BEARISH", "OPT_PC_SUPPORTIVE",
     "NEWS_SENT_POSITIVE", "NEWS_SENT_NEGATIVE", "NEWS_COVERAGE",
     "DISC_EXTENDED_MA5", "DISC_NEAR_MA5", "DISC_NEAR_MA10",
-    "SECTOR_BENCH_STRONG", "SECTOR_QQQ_TAILWIND",
+    "SECTOR_BENCH_STRONG", "SECTOR_QQQ_TAILWIND", "SECTOR_CONTEXT_CAP_APPLIED",
     "FUND_RECO_BUY", "FUND_RECO_SELL", "FUND_REVENUE_NEGATIVE",
     "MARKET_ENV_SCORE", "MARKET_RISK_ON_NOTE", "MARKET_RISK_OFF_NOTE",
     "BASE_SCORE",

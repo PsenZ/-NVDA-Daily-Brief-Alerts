@@ -25,5 +25,6 @@
   "score_vol_ratio_strong": 1.5,
   "score_vol_ratio_moderate": 1.1,
   "score_vol_ratio_light": 0.7,
-  "score_dist_ma5_extended_pct": 5.0
+  "score_dist_ma5_extended_pct": 5.0,
+  "score_sector_context_cap": 10.0
 }
