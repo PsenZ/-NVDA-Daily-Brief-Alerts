@@ -1,25 +1,39 @@
 {
  "entries": [
   {
-   "date": "2026-07-06",
+   "action": "WATCH",
+   "alpha_vs_spy": null,
+   "bear_case": [
+    "Implied volatility is elevated, pointing to heavier event risk."
+   ],
+   "bull_case": [
+    "Price still holds above SMA20, but trend strength needs more proof."
+   ],
+   "conviction_level": "low",
+   "date": "2026-07-12",
+   "decision_balance": "mixed",
+   "decision_id": "2026-07-12|NVDA|7b6a3e9c3386",
+   "five_day_return": null,
+   "holding_days": 5,
+   "horizon_alphas": {},
+   "horizon_returns": {},
+   "market_regime": "风险偏好",
+   "outcome_status": "pending",
+   "portfolio_decision": "watchlist",
+   "portfolio_reason": "Not ready for execution today.",
+   "rating": "Hold",
+   "raw_score": 110.0,
+   "rejection_reasons": [],
+   "score": 100,
+   "setup_type": "hold_watch",
+   "signal_hash": "7b6a3e9c3386",
    "symbol": "NVDA",
-   "setup_type": "breakout_entry",
-   "action": "BUY_TRIGGER",
-   "score": 82,
-   "outcome_status": "resolved",
-   "five_day_return": 0.032,
-   "alpha_vs_spy": 0.018,
-   "horizon_returns": {
-    "1": 0.006,
-    "3": 0.02,
-    "5": 0.032,
-    "10": 0.028
-   },
-   "horizon_alphas": {
-    "1": 0.003,
-    "3": 0.011,
-    "5": 0.018,
-    "10": 0.009
+   "trade_plan_summary": {
+    "entry_zone": "Observation only. No fresh size yet.",
+    "max_loss_pct": 0.0,
+    "position_pct": 0.0,
+    "stop": "NA",
+    "targets": "NA"
    }
   }
  ]

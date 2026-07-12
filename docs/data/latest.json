@@ -1,38 +1,40 @@
 {
  "date": "2026-07-12",
- "dual_time": "Sydney 2026-07-12 07:35 / US Eastern 2026-07-11 17:35",
- "generated_at": "2026-07-12T07:35:00+10:00",
+ "dual_time": "Sydney 2026-07-12 21:23 / US Eastern 2026-07-12 07:23",
+ "generated_at": "2026-07-12T21:23:51.925802+10:00",
  "market": {
   "label": "风险偏好",
   "reasons": [
    "SPY 位于 SMA20/SMA50 上方，市场背景偏多",
-   "SMH 半导体强度支撑科技延续"
+   "QQQ 位于 SMA20/SMA50 上方，市场背景偏多",
+   "VIX 未进入高压区，风险偏好尚可"
   ],
-  "risks": [
-   "QQQ 短线动能转弱"
-  ],
-  "score": 18.0,
+  "risks": [],
+  "score": 46.04,
   "snapshots": {
    "QQQ": {
-    "last": 156.4,
-    "perf20": -0.33,
-    "sma20": 156.8,
-    "sma50": 156.1
+    "last": 725.51001,
+    "perf20": 4.701997,
+    "sma20": 722.324847,
+    "sma50": 714.591559
    },
    "SMH": {
-    "last": 177.1,
-    "perf20": 3.96,
-    "sma20": 176.0,
-    "sma50": 171.4
+    "last": 611.030029,
+    "perf20": 7.027388,
+    "sma20": 621.642996,
+    "sma50": 590.2032
    },
    "SPY": {
-    "last": 161.2,
-    "perf20": 7.48,
-    "sma20": 153.4,
-    "sma50": 152.4
+    "last": 754.950012,
+    "perf20": 4.33742,
+    "sma20": 743.33284,
+    "sma50": 739.905764
    },
    "^VIX": {
-    "last": 16.35
+    "last": 15.03,
+    "perf20": -32.358235,
+    "sma20": 17.179,
+    "sma50": 17.365
    }
   }
  },
@@ -44,68 +46,52 @@
    "^VIX"
   ],
   "symbols": [
-   "NVDA",
-   "MSFT"
+   "NVDA"
   ]
  },
  "portfolio_notes": [
-  "Neutral market regime caps approved trades to 3."
+  "No actionable candidate reached portfolio review."
  ],
  "results": [
   {
-   "action": "BUY_TRIGGER",
+   "action": "WATCH",
    "bear_case": [
-    "bear case"
+    "Implied volatility is elevated, pointing to heavier event risk."
    ],
    "bull_case": [
-    "bull case"
+    "Price still holds above SMA20, but trend strength needs more proof."
    ],
    "contributions": {
     "base": 35.0,
     "discipline": 0.0,
     "event_risk": 4.0,
     "market_environment": 15.0,
-    "momentum": 32.0,
+    "momentum": 22.0,
     "news_sentiment": 10.0,
     "relative_strength_broad": 0.0,
-    "relative_strength_sector": 6.0,
-    "sector_resonance": 4.0,
-    "trend": 42.0,
-    "volatility_options": 12.0,
-    "volume": 12.0
+    "relative_strength_sector": 0.0,
+    "sector_resonance": 7.0,
+    "trend": 16.0,
+    "volatility_options": 1.0,
+    "volume": 0.0
    },
-   "conviction_level": "high",
-   "data_quality_level": "MEDIUM",
+   "conviction_level": "low",
+   "data_quality_level": "HIGH",
    "decision_balance": "mixed",
    "evidence": [
     {
-     "code": "TREND_MA_STACK",
+     "code": "TREND_ABOVE_SMA20_ONLY",
      "component": "trend",
      "confidence": null,
-     "evidence_id": "acf8ce0277d9",
+     "evidence_id": "3f4badffbf25",
      "method": "deterministic_rule",
      "observed_at": "2026-07-10T00:00:00-04:00",
-     "points": 10,
+     "points": 8,
      "polarity": "reason",
      "source": "technical",
-     "text": "Short moving averages are stacked higher, supporting a trend-following bias.",
+     "text": "Price still holds above SMA20, but trend strength needs more proof.",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": null
-    },
-    {
-     "code": "TREND_ABOVE_SMA20_50",
-     "component": "trend",
-     "confidence": null,
-     "evidence_id": "058f313a6ec5",
-     "method": "deterministic_rule",
-     "observed_at": "2026-07-10T00:00:00-04:00",
-     "points": 18,
-     "polarity": "reason",
-     "source": "technical",
-     "text": "Price remains above SMA20 and SMA50, keeping the intermediate trend constructive.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
      "value": null
     },
     {
@@ -120,22 +106,7 @@
      "source": "technical",
      "text": "Price is still above SMA200, keeping the long-term structure supportive.",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": null
-    },
-    {
-     "code": "TREND_NEAR_55D_HIGH",
-     "component": "trend",
-     "confidence": null,
-     "evidence_id": "14ddd67fca15",
-     "method": "deterministic_rule",
-     "observed_at": "2026-07-10T00:00:00-04:00",
-     "points": 6,
-     "polarity": "reason",
-     "source": "technical",
-     "text": "Price is trading near the 55-day high, which supports a trend continuation read.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
      "value": null
     },
     {
@@ -150,14 +121,14 @@
      "source": "technical",
      "text": "MACD is above signal and the histogram is expanding, showing improving momentum.",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
      "value": null
     },
     {
      "code": "MOM_RSI_HEALTHY",
      "component": "momentum",
      "confidence": null,
-     "evidence_id": "2eb7fa5b14f7",
+     "evidence_id": "bad74745cb5f",
      "method": "deterministic_rule",
      "observed_at": "2026-07-10T00:00:00-04:00",
      "points": 10,
@@ -165,29 +136,14 @@
      "source": "technical",
      "text": "RSI remains in a healthy range without obvious overheating.",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": 58.0
-    },
-    {
-     "code": "MOM_ADX_TREND",
-     "component": "momentum",
-     "confidence": null,
-     "evidence_id": "c45bd364af28",
-     "method": "deterministic_rule",
-     "observed_at": "2026-07-10T00:00:00-04:00",
-     "points": 10,
-     "polarity": "reason",
-     "source": "technical",
-     "text": "ADX is above 25 with +DI leading, which supports trend persistence.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": 28.0
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
+     "value": 57.01
     },
     {
      "code": "RS_BROAD_NEUTRAL",
      "component": "relative_strength_broad",
      "confidence": null,
-     "evidence_id": "c69cd110c1c1",
+     "evidence_id": "0676f22785fd",
      "method": "deterministic_rule",
      "observed_at": "2026-07-10T00:00:00-04:00",
      "points": 0.0,
@@ -195,38 +151,23 @@
      "source": "technical",
      "text": "20-session performance is roughly in line with SPY.",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": 2.52
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
+     "value": 0.92
     },
     {
-     "code": "RS_SECTOR_OUTPERFORM",
+     "code": "RS_SECTOR_NEUTRAL",
      "component": "relative_strength_sector",
      "confidence": null,
-     "evidence_id": "a1e6e8e03c39",
+     "evidence_id": "6af7b9103e40",
      "method": "deterministic_rule",
-     "observed_at": "2026-07-10T00:00:00-04:00",
-     "points": 6,
-     "polarity": "reason",
+     "observed_at": null,
+     "points": 0.0,
+     "polarity": "info",
      "source": "market",
-     "text": "NVDA is leading its sector benchmark SMH over the last 20 sessions.",
+     "text": "20-session performance is roughly in line with SMH.",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": 6.04
-    },
-    {
-     "code": "VOL_SURGE_5D",
-     "component": "volume",
-     "confidence": null,
-     "evidence_id": "62a5cace160f",
-     "method": "deterministic_rule",
-     "observed_at": "2026-07-10T00:00:00-04:00",
-     "points": 12,
-     "polarity": "reason",
-     "source": "technical",
-     "text": "Volume is running above twice the 5-day average, which improves breakout confirmation.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": 2.2
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
+     "value": -1.77
     },
     {
      "code": "VOLOPT_BASELINE",
@@ -240,44 +181,44 @@
      "source": "technical",
      "text": "Volatility/options baseline.",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
      "value": null
     },
     {
-     "code": "OPT_IV_LOW",
+     "code": "OPT_IV_HIGH",
      "component": "volatility_options",
      "confidence": null,
-     "evidence_id": "5b0441682442",
+     "evidence_id": "2afad908b92c",
      "method": "deterministic_rule",
-     "observed_at": "2026-07-10T00:00:00-04:00",
-     "points": 3,
-     "polarity": "info",
+     "observed_at": "2026-07-12T11:23:53.153062+00:00",
+     "points": -8,
+     "polarity": "risk",
      "source": "options",
-     "text": "Implied volatility is subdued.",
+     "text": "Implied volatility is elevated, pointing to heavier event risk.",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": 0.38
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
+     "value": 0.74
     },
     {
      "code": "OPT_PC_SUPPORTIVE",
      "component": "volatility_options",
      "confidence": null,
-     "evidence_id": "78dce3bf4bd6",
+     "evidence_id": "223c14033837",
      "method": "deterministic_rule",
-     "observed_at": "2026-07-10T00:00:00-04:00",
+     "observed_at": "2026-07-12T11:23:53.153062+00:00",
      "points": 4,
      "polarity": "reason",
      "source": "options",
      "text": "Put/Call volume is supportive of a more constructive bias.",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": 0.65
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
+     "value": 0.47
     },
     {
      "code": "NEWS_SENT_POSITIVE",
      "component": "news_sentiment",
      "confidence": null,
-     "evidence_id": "120d4dbcc1c5",
+     "evidence_id": "4c62f52b4ca8",
      "method": "deterministic_rule",
      "observed_at": null,
      "points": 8,
@@ -285,14 +226,14 @@
      "source": "news",
      "text": "Headline and social sentiment remain constructive.",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": 0.3
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
+     "value": 0.25
     },
     {
      "code": "NEWS_COVERAGE",
      "component": "news_sentiment",
      "confidence": null,
-     "evidence_id": "2006cca8083d",
+     "evidence_id": "665a5a4ff9de",
      "method": "deterministic_rule",
      "observed_at": null,
      "points": 2,
@@ -300,53 +241,68 @@
      "source": "news",
      "text": "Recent news coverage exists.",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": 1
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
+     "value": 8
     },
     {
      "code": "SECTOR_BENCH_STRONG",
      "component": "sector_resonance",
      "confidence": null,
-     "evidence_id": "45a417adee00",
+     "evidence_id": "9205ba9f12ac",
      "method": "deterministic_rule",
-     "observed_at": "2026-07-10T00:00:00-04:00",
+     "observed_at": null,
      "points": 4,
      "polarity": "reason",
      "source": "market",
      "text": "SMH sector strength is supporting follow-through.",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": 3.96
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
+     "value": 7.03
+    },
+    {
+     "code": "SECTOR_QQQ_TAILWIND",
+     "component": "sector_resonance",
+     "confidence": null,
+     "evidence_id": "4278e67322cb",
+     "method": "deterministic_rule",
+     "observed_at": null,
+     "points": 3,
+     "polarity": "reason",
+     "source": "market",
+     "text": "QQQ remains constructive, which helps growth exposure.",
+     "threshold": null,
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
+     "value": 4.7
     },
     {
      "code": "FUND_RECO_BUY",
      "component": "event_risk",
      "confidence": null,
-     "evidence_id": "3c9bf41fcac4",
+     "evidence_id": "f823ae828d1e",
      "method": "deterministic_rule",
-     "observed_at": "2026-07-10T00:00:00-04:00",
+     "observed_at": "2026-07-12T11:23:52.789608+00:00",
      "points": 4,
      "polarity": "info",
      "source": "fundamental",
      "text": "Street consensus leans buy.",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": "buy"
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
+     "value": "strong_buy"
     },
     {
      "code": "MARKET_ENV_SCORE",
      "component": "market_environment",
      "confidence": null,
-     "evidence_id": "6954cd591f50",
+     "evidence_id": "7e67ed7c687b",
      "method": "deterministic_rule",
-     "observed_at": "2026-07-10T00:00:00-04:00",
+     "observed_at": null,
      "points": 15.0,
      "polarity": "info",
      "source": "market",
      "text": "Market-environment score (clipped).",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": 18.0
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
+     "value": 46.04
     },
     {
      "code": "MARKET_RISK_ON_NOTE",
@@ -354,13 +310,13 @@
      "confidence": null,
      "evidence_id": "7612eacd8a33",
      "method": "deterministic_rule",
-     "observed_at": "2026-07-10T00:00:00-04:00",
+     "observed_at": null,
      "points": null,
      "polarity": "reason",
      "source": "market",
      "text": "The market filter remains in a risk-on state.",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
      "value": null
     },
     {
@@ -375,492 +331,68 @@
      "source": "technical",
      "text": "Base score.",
      "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
+     "timestamp": "2026-07-12T21:23:51.925802+10:00",
      "value": null
     }
    ],
-   "is_actionable": true,
-   "last_price": 100.0,
+   "is_actionable": false,
+   "last_price": 210.960007,
    "market_evidence": [
-    "QQQ remains above SMA20."
+    "SMH sector strength is supporting follow-through.",
+    "QQQ remains constructive, which helps growth exposure."
    ],
    "plan": {
-    "cancel": "cancel if invalidated",
-    "entry_high": 101.0,
-    "entry_low": 100.0,
-    "entry_zone": "$100.00 - $101.00",
-    "max_loss_pct": 0.5,
-    "position_pct": 6.4,
-    "rr": 1.8,
-    "stop": "$96.00",
-    "stop_price": 96.0,
-    "target1": 107.5,
-    "target2": 112.0,
-    "targets": "$107.50 / $112.00",
-    "trigger": "breakout confirmed"
+    "cancel": "Drop below key support or lose relative strength further.",
+    "entry_high": null,
+    "entry_low": null,
+    "entry_zone": "Observation only. No fresh size yet.",
+    "max_loss_pct": 0.0,
+    "position_pct": 0.0,
+    "rr": 0.0,
+    "stop": "NA",
+    "stop_price": null,
+    "target1": null,
+    "target2": null,
+    "targets": "NA",
+    "trigger": "Wait for a cleaner breakout or a healthier pullback reset."
    },
-   "portfolio_decision": "approved",
-   "portfolio_reason": "Approved.",
+   "portfolio_decision": "watchlist",
+   "portfolio_reason": "Not ready for execution today.",
    "position_context": "No open position.",
    "rank": 1,
-   "rating": "Buy",
-   "raw_score": 82.0,
+   "rating": "Hold",
+   "raw_score": 110.0,
    "reasons": [
-    "reason a",
-    "reason b"
+    "Price still holds above SMA20, but trend strength needs more proof.",
+    "Price is still above SMA200, keeping the long-term structure supportive.",
+    "MACD is above signal and the histogram is expanding, showing improving momentum.",
+    "RSI remains in a healthy range without obvious overheating.",
+    "Put/Call volume is supportive of a more constructive bias.",
+    "Headline and social sentiment remain constructive.",
+    "SMH sector strength is supporting follow-through.",
+    "QQQ remains constructive, which helps growth exposure."
    ],
-   "risks": [],
-   "score": 82,
-   "setup_type": "breakout_entry",
-   "signal_type": "breakout",
+   "risks": [
+    "Implied volatility is elevated, pointing to heavier event risk."
+   ],
+   "score": 100,
+   "setup_type": "hold_watch",
+   "signal_type": "持有观察",
    "suggested_posture": "monitor-only",
    "suppressed_by": [],
    "symbol": "NVDA",
    "validation_warnings": []
-  },
-  {
-   "action": "WATCH",
-   "bear_case": [
-    "bear case"
-   ],
-   "bull_case": [
-    "bull case"
-   ],
-   "contributions": {
-    "trend": 10.0
-   },
-   "conviction_level": "low",
-   "data_quality_level": "MEDIUM",
-   "decision_balance": "mixed",
-   "evidence": [],
-   "is_actionable": false,
-   "last_price": 100.0,
-   "market_evidence": [
-    "QQQ remains above SMA20."
-   ],
-   "plan": {
-    "cancel": "cancel if invalidated",
-    "entry_high": null,
-    "entry_low": null,
-    "entry_zone": "NA",
-    "max_loss_pct": 0.0,
-    "position_pct": 0.0,
-    "rr": 0.0,
-    "stop": "NA",
-    "stop_price": null,
-    "target1": null,
-    "target2": null,
-    "targets": "NA",
-    "trigger": "wait for trigger"
-   },
-   "portfolio_decision": "watchlist",
-   "portfolio_reason": "Not ready yet.",
-   "position_context": "No open position.",
-   "rank": 1,
-   "rating": "Hold",
-   "raw_score": 58.0,
-   "reasons": [
-    "reason a",
-    "reason b"
-   ],
-   "risks": [],
-   "score": 58,
-   "setup_type": "setup",
-   "signal_type": "hold",
-   "suggested_posture": "monitor-only",
-   "suppressed_by": [],
-   "symbol": "AAPL",
-   "validation_warnings": []
-  },
-  {
-   "action": "ADD_TRIGGER",
-   "bear_case": [
-    "bear case"
-   ],
-   "bull_case": [
-    "bull case"
-   ],
-   "contributions": {
-    "base": 35.0,
-    "discipline": 0.0,
-    "event_risk": 0.0,
-    "market_environment": 15.0,
-    "momentum": 32.0,
-    "news_sentiment": 0.0,
-    "relative_strength_broad": -6.0,
-    "relative_strength_sector": 0.0,
-    "sector_resonance": 0.0,
-    "trend": 42.0,
-    "volatility_options": 5.0,
-    "volume": 4.0
-   },
-   "conviction_level": "high",
-   "data_quality_level": "MEDIUM",
-   "decision_balance": "mixed",
-   "evidence": [
-    {
-     "code": "TREND_MA_STACK",
-     "component": "trend",
-     "confidence": null,
-     "evidence_id": "acf8ce0277d9",
-     "method": "deterministic_rule",
-     "observed_at": null,
-     "points": 10,
-     "polarity": "reason",
-     "source": "technical",
-     "text": "Short moving averages are stacked higher, supporting a trend-following bias.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": null
-    },
-    {
-     "code": "TREND_ABOVE_SMA20_50",
-     "component": "trend",
-     "confidence": null,
-     "evidence_id": "058f313a6ec5",
-     "method": "deterministic_rule",
-     "observed_at": null,
-     "points": 18,
-     "polarity": "reason",
-     "source": "technical",
-     "text": "Price remains above SMA20 and SMA50, keeping the intermediate trend constructive.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": null
-    },
-    {
-     "code": "TREND_ABOVE_SMA200",
-     "component": "trend",
-     "confidence": null,
-     "evidence_id": "531953c628b6",
-     "method": "deterministic_rule",
-     "observed_at": null,
-     "points": 8,
-     "polarity": "reason",
-     "source": "technical",
-     "text": "Price is still above SMA200, keeping the long-term structure supportive.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": null
-    },
-    {
-     "code": "TREND_NEAR_55D_HIGH",
-     "component": "trend",
-     "confidence": null,
-     "evidence_id": "14ddd67fca15",
-     "method": "deterministic_rule",
-     "observed_at": null,
-     "points": 6,
-     "polarity": "reason",
-     "source": "technical",
-     "text": "Price is trading near the 55-day high, which supports a trend continuation read.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": null
-    },
-    {
-     "code": "MOM_MACD_EXPANDING",
-     "component": "momentum",
-     "confidence": null,
-     "evidence_id": "e7082e6a7446",
-     "method": "deterministic_rule",
-     "observed_at": null,
-     "points": 12,
-     "polarity": "reason",
-     "source": "technical",
-     "text": "MACD is above signal and the histogram is expanding, showing improving momentum.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": null
-    },
-    {
-     "code": "MOM_RSI_HEALTHY",
-     "component": "momentum",
-     "confidence": null,
-     "evidence_id": "39522c48f693",
-     "method": "deterministic_rule",
-     "observed_at": null,
-     "points": 10,
-     "polarity": "reason",
-     "source": "technical",
-     "text": "RSI remains in a healthy range without obvious overheating.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": 48.0
-    },
-    {
-     "code": "MOM_ADX_TREND",
-     "component": "momentum",
-     "confidence": null,
-     "evidence_id": "c45bd364af28",
-     "method": "deterministic_rule",
-     "observed_at": null,
-     "points": 10,
-     "polarity": "reason",
-     "source": "technical",
-     "text": "ADX is above 25 with +DI leading, which supports trend persistence.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": 28.0
-    },
-    {
-     "code": "RS_BROAD_LAG",
-     "component": "relative_strength_broad",
-     "confidence": null,
-     "evidence_id": "bf34a91a5dd0",
-     "method": "deterministic_rule",
-     "observed_at": null,
-     "points": -6,
-     "polarity": "risk",
-     "source": "technical",
-     "text": "MSFT is lagging SPY over the last 20 sessions.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": -6.48
-    },
-    {
-     "code": "VOL_LIGHT_PULLBACK",
-     "component": "volume",
-     "confidence": null,
-     "evidence_id": "141d59220ee4",
-     "method": "deterministic_rule",
-     "observed_at": null,
-     "points": 4,
-     "polarity": "reason",
-     "source": "technical",
-     "text": "The pullback is happening on lighter 5-day volume, which fits a constructive retracement.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": 0.6
-    },
-    {
-     "code": "VOLOPT_BASELINE",
-     "component": "volatility_options",
-     "confidence": null,
-     "evidence_id": "78d9ea075a9e",
-     "method": "deterministic_rule",
-     "observed_at": null,
-     "points": 5.0,
-     "polarity": "info",
-     "source": "technical",
-     "text": "Volatility/options baseline.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": null
-    },
-    {
-     "code": "MARKET_ENV_SCORE",
-     "component": "market_environment",
-     "confidence": null,
-     "evidence_id": "6954cd591f50",
-     "method": "deterministic_rule",
-     "observed_at": null,
-     "points": 15.0,
-     "polarity": "info",
-     "source": "market",
-     "text": "Market-environment score (clipped).",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": 18.0
-    },
-    {
-     "code": "MARKET_RISK_ON_NOTE",
-     "component": "market_environment",
-     "confidence": null,
-     "evidence_id": "7612eacd8a33",
-     "method": "deterministic_rule",
-     "observed_at": null,
-     "points": null,
-     "polarity": "reason",
-     "source": "market",
-     "text": "The market filter remains in a risk-on state.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": null
-    },
-    {
-     "code": "BASE_SCORE",
-     "component": "base",
-     "confidence": null,
-     "evidence_id": "13397f87dccf",
-     "method": "deterministic_rule",
-     "observed_at": null,
-     "points": 35.0,
-     "polarity": "info",
-     "source": "technical",
-     "text": "Base score.",
-     "threshold": null,
-     "timestamp": "2026-07-12T07:35:00+10:00",
-     "value": null
-    }
-   ],
-   "is_actionable": true,
-   "last_price": 100.0,
-   "market_evidence": [
-    "QQQ remains above SMA20."
-   ],
-   "plan": {
-    "cancel": "cancel if invalidated",
-    "entry_high": null,
-    "entry_low": null,
-    "entry_zone": "NA",
-    "max_loss_pct": 0.0,
-    "position_pct": 0.0,
-    "rr": 1.8,
-    "stop": "NA",
-    "stop_price": null,
-    "target1": null,
-    "target2": null,
-    "targets": "NA",
-    "trigger": "breakout confirmed"
-   },
-   "portfolio_decision": "deferred",
-   "portfolio_reason": "Deferred after reaching the daily approval limit (3).",
-   "position_context": "No open position.",
-   "rank": 1,
-   "rating": "Overweight",
-   "raw_score": 71.0,
-   "reasons": [
-    "reason a",
-    "reason b"
-   ],
-   "risks": [],
-   "score": 71,
-   "setup_type": "pullback_add",
-   "signal_type": "pullback",
-   "suggested_posture": "monitor-only",
-   "suppressed_by": [],
-   "symbol": "MSFT",
-   "validation_warnings": []
-  },
-  {
-   "action": "RISK_REDUCE",
-   "bear_case": [
-    "RSI overheated above 74.",
-    "Price extended far above MA5."
-   ],
-   "bull_case": [
-    "bull case"
-   ],
-   "contributions": {
-    "trend": 10.0
-   },
-   "conviction_level": "low",
-   "data_quality_level": "MEDIUM",
-   "decision_balance": "mixed",
-   "evidence": [],
-   "is_actionable": false,
-   "last_price": 100.0,
-   "market_evidence": [
-    "QQQ remains above SMA20."
-   ],
-   "plan": {
-    "cancel": "cancel if invalidated",
-    "entry_high": null,
-    "entry_low": null,
-    "entry_zone": "NA",
-    "max_loss_pct": 0.0,
-    "position_pct": 0.0,
-    "rr": 0.0,
-    "stop": "NA",
-    "stop_price": null,
-    "target1": null,
-    "target2": null,
-    "targets": "NA",
-    "trigger": "wait for trigger"
-   },
-   "portfolio_decision": "risk_action",
-   "portfolio_reason": "Risk control takes priority over new exposure.",
-   "position_context": "No open position.",
-   "rank": 1,
-   "rating": "Underweight",
-   "raw_score": 38.0,
-   "reasons": [
-    "reason a",
-    "reason b"
-   ],
-   "risks": [
-    "RSI overheated above 74.",
-    "Price extended far above MA5."
-   ],
-   "score": 38,
-   "setup_type": "risk_reduce",
-   "signal_type": "risk_reduce",
-   "suggested_posture": "monitor-only",
-   "suppressed_by": [],
-   "symbol": "TSLA",
-   "validation_warnings": []
-  },
-  {
-   "action": "REJECT",
-   "bear_case": [
-    "bear case"
-   ],
-   "bull_case": [
-    "bull case"
-   ],
-   "contributions": {
-    "trend": 10.0
-   },
-   "conviction_level": "low",
-   "data_quality_level": "MEDIUM",
-   "decision_balance": "mixed",
-   "evidence": [],
-   "is_actionable": false,
-   "last_price": 100.0,
-   "market_evidence": [
-    "QQQ remains above SMA20."
-   ],
-   "plan": {
-    "cancel": "cancel if invalidated",
-    "entry_high": null,
-    "entry_low": null,
-    "entry_zone": "NA",
-    "max_loss_pct": 0.0,
-    "position_pct": 0.0,
-    "rr": 0.0,
-    "stop": "NA",
-    "stop_price": null,
-    "target1": null,
-    "target2": null,
-    "targets": "NA",
-    "trigger": "wait for trigger"
-   },
-   "portfolio_decision": "rejected",
-   "portfolio_reason": "Blocked before approval.",
-   "position_context": "No open position.",
-   "rank": 1,
-   "rating": "No Trade",
-   "raw_score": 40.0,
-   "reasons": [
-    "reason a",
-    "reason b"
-   ],
-   "risks": [
-    "Entry zone width 6.5% exceeds rejection threshold 6.0%."
-   ],
-   "score": 40,
-   "setup_type": "wait",
-   "signal_type": "wait",
-   "suggested_posture": "monitor-only",
-   "suppressed_by": [
-    "trade_plan_validation_failed"
-   ],
-   "symbol": "AMD",
-   "validation_warnings": []
   }
  ],
- "review_notes": [
-  "setup_type:breakout_entry avg 5D alpha +1.20% over 4 resolved decision(s). (t=+2.10, n=4: not significant)"
- ],
- "sample": true,
+ "review_notes": [],
+ "sample": false,
  "schema_version": 3,
  "summary": {
-  "approved": 1,
-  "deferred": 1,
-  "rejected": 1,
-  "risk_actions": 1,
-  "trading_posture": "Selective execution",
+  "approved": 0,
+  "deferred": 0,
+  "rejected": 0,
+  "risk_actions": 0,
+  "trading_posture": "Stay patient for cleaner entries",
   "watchlist": 1
  }
 }
