@@ -90,3 +90,23 @@ def test_attribution_report_produces_all_cuts():
     assert "pullback_add in neutral" in combos
     text = format_report(report)
     assert "insufficient sample" in text   # both groups are tiny
+
+
+def test_benchmark_window_is_execution_consistent():
+    """Entry leg = benchmark OPEN of entry day; gap exits measure the
+    benchmark at its open, close-style exits at its close (R5.5)."""
+    bench = pd.DataFrame(
+        {
+            "Open": [498.0, 503.0, 507.0],
+            "Close": [500.0, 505.0, 510.0],
+        },
+        index=pd.date_range("2026-01-06", periods=3, freq="B"),
+    )
+    normal = trade(exit_reason="target_hit")           # exit day close 510
+    gap = trade(exit_reason="gap_stop", exit_price=90.0, r_net=-2.0)  # exit day open 507
+
+    attach_benchmark_alpha([normal, gap], bench)
+
+    assert normal.benchmark_return == round(510.0 / 498.0 - 1, 6)  # open -> close
+    assert gap.benchmark_return == round(507.0 / 498.0 - 1, 6)     # open -> open
+    assert normal.alpha == round((110.0 / 100.0 - 1) - normal.benchmark_return, 6)
