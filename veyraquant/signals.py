@@ -239,6 +239,14 @@ def assign_ranks(results: list[SignalResult]) -> list[SignalResult]:
 
 
 def enforce_portfolio_heat(results: list[SignalResult], max_heat_pct: float) -> list[SignalResult]:
+    """DEPRECATED (R3.5): no longer called by the production chain.
+
+    Global heat is now allocated inside decision_manager.apply_portfolio_manager
+    AFTER approval checks, so deferred candidates cannot consume it. This
+    function is kept only as a compatibility API for external callers/tests;
+    do not reintroduce it before apply_portfolio_manager - heat would then
+    be charged twice.
+    """
     heat_left = max_heat_pct
     for result in results:
         if not result.is_actionable:
