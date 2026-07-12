@@ -17,8 +17,9 @@ on:
 permissions:
   contents: write
 
+# Shared write-lock with daily.yml: both commit state/ and docs/data.
 concurrency:
-  group: veyraquant-intraday-${{ github.ref }}
+  group: veyraquant-state-writer-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -55,8 +56,11 @@ jobs:
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add --ignore-errors state/armed_plans.json docs/data/armed_plans.json || true
             git commit -m "Update armed plan state"
+            echo "Rebasing onto origin/${GITHUB_REF_NAME} before push..."
             git pull --rebase origin "${GITHUB_REF_NAME}"
+            echo "Pushing armed plan state..."
             git push
+            echo "State push complete."
           else
             echo "No armed plan changes to commit."
           fi
