@@ -1,10 +1,12 @@
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from .armed_plans import build_armed_plans, load_plans, merge_plans, save_plans
 from .config import AppConfig
 from .data import DataClient
 from .export import export_armed_plans, export_dashboard
+from .health import build_run_manifest, utc_now_iso, write_health
 from .decision_manager import apply_portfolio_manager
 from .emailer import send_email
 from .market import build_market_context
@@ -52,16 +54,21 @@ def run(config: AppConfig | None = None) -> int:
         logger.info("Nothing sent; state unchanged.")
         return 0
 
+    run_started = utc_now_iso()
+    run_t0 = time.monotonic()
     client = DataClient(config)
     positions = load_positions(config.positions_path)
+    fetch_t0 = time.monotonic()
     market_histories = _fetch_market_histories(client, config)
     market = build_market_context(market_histories)
     symbol_data_items = _fetch_symbol_data(client, config)
+    data_fetch_seconds = time.monotonic() - fetch_t0
     results, portfolio_notes = build_results(symbol_data_items, market, config, positions)
     review_notes = brief_review_notes(config.memory_log_path)
 
     sent_any = False
     changed = False
+    export_ok: bool | None = None
     daily_sent, daily_changed = maybe_send_daily_report(
         state, now_dt, results, market, portfolio_notes, config, review_notes
     )
@@ -69,14 +76,31 @@ def run(config: AppConfig | None = None) -> int:
         sent_any = True
         if not config.dry_run:
             arm_approved_plans(results, config, now_dt)
-            export_dashboard(
+            export_ok = export_dashboard(
                 results, market, config, now_dt, portfolio_notes, review_notes
             )
     if daily_changed:
         changed = True
-    if maybe_send_entry_alerts(state, now_dt, results, config):
+    alerts_sent = maybe_send_entry_alerts(state, now_dt, results, config)
+    if alerts_sent:
         sent_any = True
         changed = True
+
+    if not config.dry_run:
+        try:
+            manifest = build_run_manifest(
+                results,
+                started_at=run_started,
+                finished_at=utc_now_iso(),
+                duration_seconds=time.monotonic() - run_t0,
+                data_fetch_seconds=data_fetch_seconds,
+                email_sent=daily_sent,
+                alerts_sent=int(alerts_sent),
+                export_ok=export_ok,
+            )
+            write_health(getattr(config, "export_dir", ""), manifest)
+        except Exception:
+            logger.warning("Run manifest write failed.", exc_info=True)
 
     if changed and not config.dry_run:
         write_state(config.state_path, state)

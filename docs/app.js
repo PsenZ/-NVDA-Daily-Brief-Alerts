@@ -39,6 +39,13 @@ const I18N = {
     "chart.stop": "止损", "chart.entry": "入场区", "chart.t1": "T1", "chart.t2": "T2",
     "contrib.base": "基础分",
     "ev.title": "证据明细",
+    "sec.health": "系统健康",
+    "health.last_run": "最近夜间运行", "health.duration": "耗时",
+    "health.symbols": "标的 成功/缓存/失败", "health.email": "邮件",
+    "health.export": "导出", "health.alerts": "触发提醒",
+    "health.heartbeat": "盘中心跳", "health.checked": "检查计划",
+    "health.yes": "已发送", "health.no": "未发送", "health.ok": "正常", "health.fail": "失败",
+    "empty.health": "暂无运行记录 — 等待首次夜间运行。",
     "th.symbol": "标的", "th.rating": "评级", "th.score": "评分",
     "th.state": "状态", "th.why": "原因",
     "status.armed": "待触发", "status.triggered": "已触发",
@@ -81,6 +88,13 @@ const I18N = {
     "chart.stop": "STOP", "chart.entry": "ENTRY", "chart.t1": "T1", "chart.t2": "T2",
     "contrib.base": "base score",
     "ev.title": "Evidence",
+    "sec.health": "System health",
+    "health.last_run": "Last nightly run", "health.duration": "duration",
+    "health.symbols": "symbols live/cache/failed", "health.email": "email",
+    "health.export": "export", "health.alerts": "alerts",
+    "health.heartbeat": "intraday heartbeat", "health.checked": "plans checked",
+    "health.yes": "sent", "health.no": "not sent", "health.ok": "ok", "health.fail": "failed",
+    "empty.health": "No runs recorded yet - waiting for the first nightly run.",
     "th.symbol": "Symbol", "th.rating": "Rating", "th.score": "Score",
     "th.state": "State", "th.why": "Why",
     "status.armed": "armed", "status.triggered": "triggered",
@@ -90,7 +104,7 @@ const I18N = {
 };
 
 let lang = localStorage.getItem("vq-lang") || "zh";
-let cache = { brief: null, armed: null };
+let cache = { brief: null, armed: null, health: null };
 
 const $ = (id) => document.getElementById(id);
 const t = (key) => (I18N[lang] && I18N[lang][key]) || I18N.zh[key] || key;
@@ -129,6 +143,7 @@ function render() {
     ["chips", "mkt-lines", "funnel", "actions", "contrib", "watch", "risk", "rejected"].forEach(
       (id) => ($(id).innerHTML = ""));
     renderArmed(cache.armed);
+    renderHealth(cache.health);
     return;
   }
   $("sample-badge").hidden = !brief.sample;
@@ -143,6 +158,7 @@ function render() {
   renderRisk(brief);
   renderRejected(brief);
   renderNotes(brief);
+  renderHealth(cache.health);
 }
 
 /* Stale detection: the nightly export lands once per trading day, so on
@@ -385,6 +401,36 @@ function evidenceListHTML(evidence) {
     <ul class="ev-list">${rows}</ul></details>`;
 }
 
+function renderHealth(health) {
+  const node = $("health");
+  if (!node) return;
+  if (!health || !health.run_id) {
+    node.innerHTML = `<p class="empty">${esc(t("empty.health"))}</p>`;
+    return;
+  }
+  const badge = (ok, yes, no) =>
+    ok === null || ok === undefined
+      ? `<span class="status expired">NA</span>`
+      : ok
+        ? `<span class="status triggered">${esc(yes)}</span>`
+        : `<span class="status invalidated">${esc(no)}</span>`;
+  const beat = health.intraday_heartbeat;
+  const beatLine = beat
+    ? `<div class="levels">${esc(t("health.heartbeat"))}: ${esc(beat.finished_at || "")} ·
+       ${esc(t("health.checked"))} <b>${beat.checked_plans ?? 0}</b> ·
+       transitions <b>${beat.transitions ?? 0}</b></div>`
+    : "";
+  node.innerHTML = `
+    <div class="levels">
+      ${esc(t("health.last_run"))}: <b>${esc(health.finished_at || "")}</b> ·
+      ${esc(t("health.duration"))} <b>${fmt(health.duration_seconds, 1)}s</b><br>
+      ${esc(t("health.symbols"))}: <b>${health.symbols_live ?? 0}/${health.symbols_cache ?? 0}/${health.symbols_failed ?? 0}</b> ·
+      ${esc(t("health.alerts"))} <b>${health.alerts_sent ?? 0}</b> ·
+      ${esc(t("health.email"))} ${badge(health.email_sent, t("health.yes"), t("health.no"))}
+      ${esc(t("health.export"))} ${badge(health.export_ok, t("health.ok"), t("health.fail"))}
+    </div>${beatLine}`;
+}
+
 /* ---------- charts (inline SVG, palette roles from CSS vars) ---------- */
 
 function cssVar(name) {
@@ -496,11 +542,12 @@ async function boot() {
   applyI18n();
   $("lang-zh").addEventListener("click", () => setLang("zh"));
   $("lang-en").addEventListener("click", () => setLang("en"));
-  const [brief, armed] = await Promise.all([
+  const [brief, armed, health] = await Promise.all([
     fetchJSON("data/latest.json"),
     fetchJSON("data/armed_plans.json"),
+    fetchJSON("data/health.json"),
   ]);
-  cache = { brief, armed };
+  cache = { brief, armed, health };
   render();
 }
 

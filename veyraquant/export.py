@@ -88,11 +88,13 @@ def export_dashboard(
     now_dt: datetime,
     portfolio_notes: Optional[list[str]] = None,
     review_notes: Optional[list[str]] = None,
-) -> None:
-    """Best-effort export of everything the dashboard reads."""
+) -> bool:
+    """Best-effort export of everything the dashboard reads.
+
+    Returns True on success so the run manifest can report export_ok."""
     export_dir = getattr(config, "export_dir", "")
     if not export_dir:
-        return
+        return False
     try:
         payload = build_brief_payload(
             results, market, config, now_dt, portfolio_notes, review_notes
@@ -100,8 +102,10 @@ def export_dashboard(
         export_daily_brief(export_dir, payload)
         export_decisions(export_dir, getattr(config, "memory_log_path", ""))
         logger.info("Dashboard export written to %s", export_dir)
+        return True
     except Exception:
         logger.warning("Dashboard export failed; email pipeline unaffected.", exc_info=True)
+        return False
 
 
 def export_daily_brief(export_dir: str, payload: dict[str, Any]) -> None:

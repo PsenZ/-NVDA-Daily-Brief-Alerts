@@ -26,8 +26,14 @@ def run_intraday_check(
     price_fetcher: PriceFetcher | None = None,
     now_et: datetime | None = None,
 ) -> int:
+    import time as _time
+
+    from .health import intraday_heartbeat, utc_now_iso, write_health
+
     config = config or AppConfig.from_env()
     now_et = now_et or now_us_eastern()
+    heartbeat_started = utc_now_iso()
+    heartbeat_t0 = _time.monotonic()
     if not is_regular_us_market_hours(now_et):
         logger.info("Intraday check skipped: outside regular US market hours.")
         return 0
@@ -47,6 +53,7 @@ def run_intraday_check(
         return 0
 
     fetch = price_fetcher or _latest_price
+    transitions = 0
     for plan in candidates:
         symbol = plan.get("symbol", "")
         price = fetch(symbol)
@@ -56,6 +63,7 @@ def run_intraday_check(
         transition = evaluate_plan(plan, price)
         if transition is None:
             continue
+        transitions += 1
         plan["status"] = transition
         plan["resolved_at"] = now_et.isoformat()
         plan["resolved_price"] = round(float(price), 4)
@@ -71,6 +79,16 @@ def run_intraday_check(
     if changed:
         save_plans(path, plans)
         _mirror_to_dashboard(config, plans)
+    if not getattr(config, "dry_run", False):
+        write_health(
+            getattr(config, "export_dir", ""),
+            intraday_heartbeat(
+                checked_plans=len(candidates),
+                transitions=transitions,
+                started_at=heartbeat_started,
+                duration_seconds=_time.monotonic() - heartbeat_t0,
+            ),
+        )
     return 0
 
 
