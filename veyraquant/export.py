@@ -51,6 +51,10 @@ def build_brief_payload(
         "date": now_dt.strftime("%Y-%m-%d"),
         "generated_at": now_dt.isoformat(),
         "dual_time": format_dual_time(now_dt),
+        "meta": {
+            "symbols": list(getattr(config, "symbols", [])),
+            "market_symbols": list(getattr(config, "market_symbols", [])),
+        },
         "market": {
             "label": market.label,
             "score": float(market.score),

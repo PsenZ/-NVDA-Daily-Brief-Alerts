@@ -12,7 +12,14 @@ const I18N = {
     "sec.actions": "今日批准计划",
     "sec.contrib": "评分贡献",
     "sec.watch": "观察 / 延后",
+    "sec.risk": "风险动作",
+    "sec.rejected": "被拒计划",
     "sec.notes": "系统备注与决策复盘",
+    "stale": "数据可能已过期：最近一次生成于 {h} 小时前。",
+    "empty.risk": "今日没有风险动作。",
+    "empty.rejected": "今日没有被拒计划。",
+    "risk.reason": "风险原因", "risk.position": "持仓上下文", "risk.posture": "建议姿态",
+    "rej.why": "拒绝原因", "rej.blocked": "拦截条件",
     "legend.pos": "正贡献",
     "legend.neg": "负贡献",
     "disclaimer": "不连接券商 API。不自动下单。不构成投资建议。所有交易计划需要人工复核。",
@@ -46,7 +53,14 @@ const I18N = {
     "sec.actions": "Approved plans today",
     "sec.contrib": "Score contributions",
     "sec.watch": "Watch / deferred",
+    "sec.risk": "Risk actions",
+    "sec.rejected": "Rejected plans",
     "sec.notes": "System notes & decision review",
+    "stale": "Data may be stale: last generated {h} hours ago.",
+    "empty.risk": "No risk actions today.",
+    "empty.rejected": "No rejected plans today.",
+    "risk.reason": "risk reason", "risk.position": "position", "risk.posture": "suggested posture",
+    "rej.why": "why rejected", "rej.blocked": "blocked by",
     "legend.pos": "positive",
     "legend.neg": "negative",
     "disclaimer": "No broker API. No automatic orders. Not investment advice. Every trade plan requires human review.",
@@ -110,20 +124,42 @@ function render() {
   const brief = cache.brief;
   if (!brief) {
     $("regime").innerHTML = `<p class="empty">${esc(t("empty.data"))}</p>`;
-    ["chips", "mkt-lines", "funnel", "actions", "contrib", "watch"].forEach(
+    ["chips", "mkt-lines", "funnel", "actions", "contrib", "watch", "risk", "rejected"].forEach(
       (id) => ($(id).innerHTML = ""));
     renderArmed(cache.armed);
     return;
   }
   $("sample-badge").hidden = !brief.sample;
   $("stamp").textContent = brief.dual_time || brief.date || "";
+  renderStale(brief);
   renderRegime(brief);
   renderFunnel(brief.summary || {});
   renderArmed(cache.armed);
   renderActions(brief);
   renderContrib(brief);
   renderWatch(brief);
+  renderRisk(brief);
+  renderRejected(brief);
   renderNotes(brief);
+}
+
+/* Stale detection: the nightly export lands once per trading day, so on
+   weekdays anything older than 30h is suspicious; across the weekend the
+   gap legitimately stretches, so Sun/Mon get a 78h allowance. Sample seed
+   data is exempt - it is documentation, not a feed. */
+function renderStale(brief) {
+  const node = $("stale");
+  node.hidden = true;
+  if (brief.sample || !brief.generated_at) return;
+  const generated = Date.parse(brief.generated_at);
+  if (Number.isNaN(generated)) return;
+  const ageHours = (Date.now() - generated) / 3_600_000;
+  const day = new Date().getDay(); // 0 Sun .. 6 Sat
+  const allowance = day === 0 || day === 1 || day === 6 ? 78 : 30;
+  if (ageHours > allowance) {
+    node.textContent = t("stale").replace("{h}", String(Math.round(ageHours)));
+    node.hidden = false;
+  }
 }
 
 function regimePillClass(label) {
@@ -274,6 +310,50 @@ function renderWatch(brief) {
     <thead><tr><th>${esc(t("th.symbol"))}</th><th>${esc(t("th.rating"))}</th>
     <th>${esc(t("th.score"))}</th><th>${esc(t("th.state"))}</th><th>${esc(t("th.why"))}</th></tr></thead>
     <tbody>${body}</tbody></table>`;
+}
+
+function renderRisk(brief) {
+  const rows = (brief.results || []).filter((item) => item.action === "RISK_REDUCE");
+  if (!rows.length) {
+    $("risk").innerHTML = `<p class="empty">${esc(t("empty.risk"))}</p>`;
+    return;
+  }
+  $("risk").innerHTML = rows
+    .map((item) => `<div class="plan-row">
+      <div class="plan-head">
+        <span class="sym">${esc(item.symbol)}</span>
+        <span class="kind">${esc(item.rating)} · ${esc(t("plan.score"))} ${item.score}</span>
+        <span class="status invalidated">${esc(item.action)}</span>
+      </div>
+      <div class="levels">
+        ${esc(t("risk.reason"))}: <b>${esc((item.bear_case || item.risks || []).slice(0, 2).join(" · "))}</b><br>
+        ${esc(t("risk.position"))}: ${esc(item.position_context || "")} ·
+        ${esc(t("risk.posture"))}: <b>${esc(item.suggested_posture || "")}</b><br>
+        ${esc(item.portfolio_reason || "")}
+      </div>
+    </div>`)
+    .join("");
+}
+
+function renderRejected(brief) {
+  const rows = (brief.results || []).filter((item) => item.action === "REJECT");
+  if (!rows.length) {
+    $("rejected").innerHTML = `<p class="empty">${esc(t("empty.rejected"))}</p>`;
+    return;
+  }
+  $("rejected").innerHTML = rows
+    .map((item) => `<div class="plan-row">
+      <div class="plan-head">
+        <span class="sym">${esc(item.symbol)}</span>
+        <span class="kind">${esc(t("plan.score"))} ${item.score}</span>
+        <span class="status expired">${esc(item.action)}</span>
+      </div>
+      <div class="levels">
+        ${esc(t("rej.why"))}: <b>${esc((item.risks || item.bear_case || []).slice(0, 2).join(" · "))}</b><br>
+        ${esc(t("rej.blocked"))}: ${esc((item.suppressed_by || []).join(", ") || "—")}
+      </div>
+    </div>`)
+    .join("");
 }
 
 function renderNotes(brief) {
