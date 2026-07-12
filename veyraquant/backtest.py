@@ -65,12 +65,17 @@ def run_backtest(
             market,
             config,
         )
-        if result.signal_type not in {"突破入场", "趋势回踩加仓"}:
+        # Structural fields only (R3.5): decisions must never depend on
+        # display strings or localized signal_type text.
+        if not result.is_actionable:
+            continue
+        plan = result.trade_plan
+        if plan.stop_price is None or plan.target1 is None:
             continue
 
         entry = float(daily["Close"].iloc[idx + 1])
-        stop = _money_to_float(result.stop)
-        target = _money_to_float(result.targets.split("/")[0])
+        stop = float(plan.stop_price)
+        target = float(plan.target1)
         future = daily.iloc[idx + 2 : idx + 7]
         outcome_r = 0.0
         risk = max(entry - stop, 1e-9)
@@ -135,5 +140,3 @@ def _market_slice(
     return sliced
 
 
-def _money_to_float(value: str) -> float:
-    return float(value.replace("$", "").replace(",", "").strip())
