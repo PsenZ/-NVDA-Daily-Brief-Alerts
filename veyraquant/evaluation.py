@@ -38,6 +38,11 @@ class TradeSignal:
     target_price: float
     risk_pct: float          # requested account risk for this trade
     score: float = 0.0       # priority when several signals compete for heat
+    # Attribution tags (R5): carried through to SimTrade for grouping.
+    setup_type: str = ""
+    market_regime: str = ""
+    sector: str = ""
+    data_quality: str = ""
 
 
 @dataclass
@@ -56,6 +61,12 @@ class SimTrade:
     r_gross: float = 0.0
     r_net: float = 0.0
     pnl: float = 0.0
+    setup_type: str = ""
+    market_regime: str = ""
+    sector: str = ""
+    data_quality: str = ""
+    benchmark_return: Optional[float] = None  # filled by attribution
+    alpha: Optional[float] = None
 
 
 @dataclass
@@ -190,6 +201,10 @@ def run_event_backtest(
                 target_price=signal.target_price,
                 shares=shares,
                 risk_pct=allocated,
+                setup_type=signal.setup_type,
+                market_regime=signal.market_regime,
+                sector=signal.sector,
+                data_quality=signal.data_quality,
             )
             # Worst-case entry-bar handling: if the rest of the entry bar
             # trades through the stop, take the stop TODAY. The target is
@@ -221,6 +236,62 @@ def run_event_backtest(
 
     return _summarize(closed, curve, starting_equity, realized_equity, cost_bps,
                       skipped_for_heat, cancelled)
+
+
+def signals_from_pipeline(
+    symbol: str,
+    daily: pd.DataFrame,
+    config: Any,
+    market_histories: dict[str, pd.DataFrame | None] | None = None,
+    first_signal_bar: int = 80,
+    profile: Any = None,
+) -> list[TradeSignal]:
+    """Generate TradeSignals by running the REAL analyze pipeline bar by bar.
+
+    Walk-forward evaluation (R5) uses this as the signal source, so the
+    engine trades exactly what the live system would have signalled. The
+    market filter sees only past benchmark bars (sliced per step); news is
+    neutral and fundamentals empty - free history has neither, and that
+    limitation is explicit rather than fabricated. first_signal_bar
+    confines signals to the evaluation region (train/test isolation)
+    while indicators keep their warmup history.
+    """
+    from .backtest import _market_slice
+    from .instruments import default_profile
+    from .market import build_market_context
+    from .models import FundamentalsData, NewsBundle
+    from .signals import analyze_symbol
+
+    prof = profile or default_profile(symbol)
+    news = NewsBundle([], [], {"score": 0.0, "label": "中性", "sample_size": 0})
+    signals: list[TradeSignal] = []
+    for idx in range(max(80, first_signal_bar), len(daily) - 1):
+        window = daily.iloc[: idx + 1]
+        market = build_market_context(_market_slice(market_histories, window.index[-1]))
+        result = analyze_symbol(
+            symbol, window, None, FundamentalsData(), None, news, market, config,
+            profile=prof,
+        )
+        if not result.is_actionable:
+            continue
+        plan = result.trade_plan
+        if plan.stop_price is None or plan.target1 is None:
+            continue
+        signals.append(
+            TradeSignal(
+                symbol=symbol,
+                signal_idx=idx,
+                stop_price=float(plan.stop_price),
+                target_price=float(plan.target1),
+                risk_pct=float(getattr(config, "risk_per_trade_pct", 0.5)),
+                score=float(result.score),
+                setup_type=result.setup_type,
+                market_regime=result.market_regime,
+                sector=result.sector_bucket or prof.sector,
+                data_quality=result.data_quality.data_quality_level,
+            )
+        )
+    return signals
 
 
 def _summarize(
