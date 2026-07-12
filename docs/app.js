@@ -38,6 +38,7 @@ const I18N = {
     "case.bull": "看多理由", "case.bear": "关注风险",
     "chart.stop": "止损", "chart.entry": "入场区", "chart.t1": "T1", "chart.t2": "T2",
     "contrib.base": "基础分",
+    "ev.title": "证据明细",
     "th.symbol": "标的", "th.rating": "评级", "th.score": "评分",
     "th.state": "状态", "th.why": "原因",
     "status.armed": "待触发", "status.triggered": "已触发",
@@ -79,6 +80,7 @@ const I18N = {
     "case.bull": "why now", "case.bear": "watch risk",
     "chart.stop": "STOP", "chart.entry": "ENTRY", "chart.t1": "T1", "chart.t2": "T2",
     "contrib.base": "base score",
+    "ev.title": "Evidence",
     "th.symbol": "Symbol", "th.rating": "Rating", "th.score": "Score",
     "th.state": "State", "th.why": "Why",
     "status.armed": "armed", "status.triggered": "triggered",
@@ -284,6 +286,7 @@ function renderContrib(brief) {
           <span>${esc(item.signal_type || item.action)}</span>
           <span class="sc">${esc(t("plan.score"))} ${item.score}</span></summary>
         ${contribBarsSVG(item.contributions || {})}
+        ${evidenceListHTML(item.evidence || [])}
       </details>`;
     })
     .join("");
@@ -361,6 +364,25 @@ function renderNotes(brief) {
   $("notes").innerHTML = items.length
     ? items.map((item) => `<li>${esc(item)}</li>`).join("")
     : `<li class="empty">${esc(t("empty.notes"))}</li>`;
+}
+
+/* Traceable evidence behind the score: code chip, text, signed points. */
+function evidenceListHTML(evidence) {
+  if (!evidence.length) return "";
+  const rows = evidence
+    .map((item) => {
+      const cls = item.polarity === "risk" ? "neg" : item.polarity === "reason" ? "pos" : "mut";
+      const pts =
+        item.points === null || item.points === undefined
+          ? ""
+          : `<span class="pts">${item.points >= 0 ? "+" : ""}${fmt(item.points, 1)}</span>`;
+      const value =
+        item.value === null || item.value === undefined ? "" : ` <span class="val">(${esc(item.value)})</span>`;
+      return `<li class="${cls}"><i></i><code>${esc(item.code)}</code> ${esc(item.text)}${value}${pts}</li>`;
+    })
+    .join("");
+  return `<details class="ev"><summary>${esc(t("ev.title"))} (${evidence.length})</summary>
+    <ul class="ev-list">${rows}</ul></details>`;
 }
 
 /* ---------- charts (inline SVG, palette roles from CSS vars) ---------- */

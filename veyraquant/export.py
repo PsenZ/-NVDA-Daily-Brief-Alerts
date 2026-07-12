@@ -20,7 +20,8 @@ from .reporting import _trading_posture, format_dual_time
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+# v2: results[].evidence (structured, timestamped evidence trail).
+SCHEMA_VERSION = 2
 
 
 def build_brief_payload(
@@ -73,7 +74,7 @@ def build_brief_payload(
             "risk_actions": len(risk_actions),
             "rejected": len(rejected),
         },
-        "results": [_result_payload(r) for r in results],
+        "results": [_result_payload(r, now_dt.isoformat()) for r in results],
         "portfolio_notes": list(portfolio_notes or []),
         "review_notes": list(review_notes or []),
     }
@@ -133,9 +134,20 @@ def export_armed_plans(export_dir: str, plans: list[dict[str, Any]]) -> None:
     _write_json(os.path.join(export_dir, "armed_plans.json"), {"plans": plans})
 
 
-def _result_payload(result: SignalResult) -> dict[str, Any]:
+def _result_payload(result: SignalResult, generated_at: str = "") -> dict[str, Any]:
     plan = result.trade_plan
+    evidence_payload = []
+    for item in getattr(result, "evidence", []) or []:
+        if hasattr(item, "to_dict"):
+            entry = item.to_dict()
+        elif isinstance(item, dict):
+            entry = dict(item)
+        else:
+            continue
+        entry["timestamp"] = entry.get("timestamp") or generated_at
+        evidence_payload.append(entry)
     return {
+        "evidence": evidence_payload,
         "symbol": result.symbol,
         "rank": result.rank,
         "score": int(result.score),
