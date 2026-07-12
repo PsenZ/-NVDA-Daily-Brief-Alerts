@@ -68,8 +68,13 @@ jobs:
           SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
           FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
-          SYMBOLS: "NVDA,TSLA,AAPL,AMD,MU,QQQ,SMH"
-          MARKET_SYMBOLS: "SPY,QQQ,SMH,^VIX"
+          # Repository Variables (Settings -> Secrets and variables -> Actions
+          # -> Variables) override the watchlist without editing this file.
+          SYMBOLS: ${{ vars.SYMBOLS || 'NVDA,TSLA,AAPL,AMD,MU,QQQ,SMH' }}
+          MARKET_SYMBOLS: ${{ vars.MARKET_SYMBOLS || 'SPY,QQQ,SMH,^VIX' }}
+          SECTOR_MAP_JSON: ${{ vars.SECTOR_MAP_JSON || '' }}
+          SECTOR_RISK_LIMITS_JSON: ${{ vars.SECTOR_RISK_LIMITS_JSON || '' }}
+          SECTOR_POSITION_LIMITS_JSON: ${{ vars.SECTOR_POSITION_LIMITS_JSON || '' }}
           SEND_HOUR: "7"
           SEND_MINUTE: "30"
           SEND_WINDOW_MINUTES: "30"
