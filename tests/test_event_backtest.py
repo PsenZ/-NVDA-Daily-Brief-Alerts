@@ -190,3 +190,54 @@ def test_equity_curve_marks_open_positions_to_market():
     day2 = curve[frame(rows).index[2]]
     # 1% risk, $5 stop -> 200 shares; +$4 unrealized = +$800 on 100k.
     assert abs(day2 - 100_800.0) < 1e-6
+
+
+# --- R5: pipeline signal bridge ---
+
+def test_signals_from_pipeline_respects_isolation_and_carries_tags(monkeypatch):
+    from types import SimpleNamespace
+    from veyraquant.evaluation import signals_from_pipeline
+    from veyraquant.models import DataQuality, TradePlan
+
+    def fake_analyze(symbol, daily, intraday, fundamentals, options, news, market, config, **kwargs):
+        idx = len(daily) - 1
+        actionable = idx >= 120  # only late bars produce signals
+        plan = TradePlan(
+            entry_zone="z", stop="s", targets="t", position_pct=6.0, max_loss_pct=0.5,
+            rr=1.8, trigger="x", cancel="y",
+            entry_low=100.0, entry_high=101.0, stop_price=96.0, target1=107.0, target2=112.0,
+        )
+        return SimpleNamespace(
+            is_actionable=actionable, trade_plan=plan, score=77,
+            setup_type="breakout_entry", market_regime="risk-on",
+            sector_bucket="semiconductor",
+            data_quality=DataQuality(data_quality_level="HIGH"),
+        )
+
+    monkeypatch.setattr("veyraquant.signals.analyze_symbol", fake_analyze)
+
+    daily = frame([(100, 101, 99, 100)] * 140)
+    config = SimpleNamespace(risk_per_trade_pct=0.5)
+    signals = signals_from_pipeline("NVDA", daily, config, first_signal_bar=100)
+
+    assert signals
+    # Train/test isolation: nothing before first_signal_bar, nothing on the
+    # final bar (no next open to fill at).
+    assert min(s.signal_idx for s in signals) >= 120
+    assert max(s.signal_idx for s in signals) <= len(daily) - 2
+    first = signals[0]
+    assert (first.setup_type, first.market_regime, first.sector, first.data_quality) == (
+        "breakout_entry", "risk-on", "semiconductor", "HIGH",
+    )
+    assert first.stop_price == 96.0 and first.target_price == 107.0
+
+
+def test_engine_propagates_attribution_tags_to_trades():
+    signals = [TradeSignal("AAA", 0, 95.0, 110.0, 1.0, 90,
+                           setup_type="pullback_add", market_regime="neutral",
+                           sector="mega_growth", data_quality="MEDIUM")]
+    result = run_event_backtest({"AAA": frame(BASE_ROWS)}, signals, make_config())
+    trade = result.trades[0]
+    assert (trade.setup_type, trade.market_regime, trade.sector, trade.data_quality) == (
+        "pullback_add", "neutral", "mega_growth", "MEDIUM",
+    )

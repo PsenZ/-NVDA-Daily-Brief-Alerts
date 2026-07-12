@@ -111,3 +111,37 @@ def test_summarize_pools_by_trade_count_and_guards_thin_samples():
     # Same numbers but only 8 trades total -> verdict must refuse to conclude.
     thin = summarize([fold(0, 0.5, 4, 0.1, 4), fold(1, -0.1, 4, 0.0, 4)])
     assert "insufficient evidence" in thin["verdict"]
+
+
+def test_trade_sink_collects_attributed_validation_trades(monkeypatch):
+    from types import SimpleNamespace
+    from veyraquant.models import DataQuality, TradePlan
+
+    def fake_analyze(symbol, daily, intraday, fundamentals, options, news, market, config, **kwargs):
+        actionable = len(daily) - 1 >= 100
+        plan = TradePlan(
+            entry_zone="z", stop="s", targets="t", position_pct=6.0, max_loss_pct=0.5,
+            rr=1.8, trigger="x", cancel="y",
+            entry_low=100.0, entry_high=101.0, stop_price=96.0, target1=107.0, target2=112.0,
+        )
+        return SimpleNamespace(
+            is_actionable=actionable, trade_plan=plan, score=77,
+            setup_type="breakout_entry", market_regime="risk-on",
+            sector_bucket="semiconductor",
+            data_quality=DataQuality(data_quality_level="HIGH"),
+        )
+
+    monkeypatch.setattr("veyraquant.signals.analyze_symbol", fake_analyze)
+
+    daily = trending_frame(160, 100, 0.0)  # flat: timeout exits, deterministic
+    sink: list = []
+    folds = walk_forward(
+        "NVDA", daily, make_config(), param_grid={}, train_bars=130, valid_bars=30,
+        min_train_trades=1, trade_sink=sink,
+    )
+
+    assert folds and folds[0].valid_trades == len(sink)
+    assert sink, "validation trades should reach the sink"
+    assert all(t.setup_type == "breakout_entry" for t in sink)
+    assert all(t.market_regime == "risk-on" for t in sink)
+    assert all(t.exit_reason for t in sink)  # taxonomy-ready

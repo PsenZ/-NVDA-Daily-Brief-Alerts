@@ -6,27 +6,17 @@ score-band buckets, and a horizon comparison to test whether the 5-day
 holding assumption is actually the best one.
 """
 from dataclasses import dataclass
-from math import sqrt
 from typing import Any
 
 from .jsonl import read_entries
 from .memory import HORIZONS
+from .stats import is_significant as _is_significant_shared
+from .stats import mean_stats as _mean_stats_shared
 
 
 DIMENSIONS = ("setup_type", "action", "rating", "market_regime", "portfolio_decision", "score_band")
 
-# Two-sided 95% critical values of Student's t by degrees of freedom.
-_T_TABLE = {
-    1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571,
-    6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228,
-    11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145, 15: 2.131,
-    16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086,
-    21: 2.080, 22: 2.074, 23: 2.069, 24: 2.064, 25: 2.060,
-    26: 2.056, 27: 2.052, 28: 2.048, 29: 2.045, 30: 2.042,
-}
-# Below this many resolved samples a "significant" flag would be noise
-# even when |t| clears the critical value.
-MIN_SAMPLES_FOR_SIGNIFICANCE = 10
+# Statistics are shared with trade attribution via veyraquant.stats.
 
 
 @dataclass(frozen=True)
@@ -198,36 +188,11 @@ def _summarize_bucket(dimension: str, key: str, rows: list[dict[str, Any]]) -> R
 
 
 def _mean_stats(values: list[float]) -> tuple[float | None, float | None, float | None]:
-    """t statistic (mean != 0) and 95% CI for the mean; None when n < 3
-    or the sample has zero variance."""
-    n = len(values)
-    if n < 3:
-        return None, None, None
-    mean = sum(values) / n
-    variance = sum((value - mean) ** 2 for value in values) / (n - 1)
-    if variance <= 0:
-        return None, round(mean, 6), round(mean, 6)
-    std_error = sqrt(variance) / sqrt(n)
-    critical = _t_critical_95(n - 1)
-    return (
-        round(mean / std_error, 3),
-        round(mean - critical * std_error, 6),
-        round(mean + critical * std_error, 6),
-    )
+    return _mean_stats_shared(values)
 
 
 def _is_significant(t_stat: float | None, n: int) -> bool | None:
-    if t_stat is None:
-        return None
-    if n < MIN_SAMPLES_FOR_SIGNIFICANCE:
-        return False
-    return abs(t_stat) >= _t_critical_95(n - 1)
-
-
-def _t_critical_95(degrees_of_freedom: int) -> float:
-    if degrees_of_freedom < 1:
-        return float("inf")
-    return _T_TABLE.get(degrees_of_freedom, 1.96)
+    return _is_significant_shared(t_stat, n)
 
 
 def _as_float(value) -> float | None:

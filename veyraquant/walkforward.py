@@ -14,8 +14,8 @@ from typing import Any, Optional
 
 import pandas as pd
 
-from .backtest import run_backtest
 from .config import AppConfig, StrategyConfig
+from .evaluation import run_event_backtest, signals_from_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,20 @@ class FoldResult:
     baseline_valid_trades: int
 
 
+def _evaluate(
+    symbol: str,
+    frame_slice: pd.DataFrame,
+    config: AppConfig,
+    market_histories: dict[str, pd.DataFrame | None] | None,
+    first_signal_bar: int = 80,
+):
+    """Run the event engine on signals from the real pipeline (R5)."""
+    signals = signals_from_pipeline(
+        symbol, frame_slice, config, market_histories, first_signal_bar
+    )
+    return run_event_backtest({symbol: frame_slice}, signals, config)
+
+
 def walk_forward(
     symbol: str,
     daily: pd.DataFrame,
@@ -55,7 +69,13 @@ def walk_forward(
     step_bars: int | None = None,
     warmup_bars: int = 100,
     min_train_trades: int = 5,
+    trade_sink: list | None = None,
 ) -> list[FoldResult]:
+    """Rolling tune/validate on the event-driven engine.
+
+    trade_sink, when provided, collects every tuned-validation SimTrade
+    (with attribution tags) for failure-taxonomy and grouped analysis.
+    """
     grid = param_grid if param_grid is not None else DEFAULT_GRID
     combos = _grid_combos(grid)
     step = step_bars or valid_bars
@@ -76,14 +96,14 @@ def walk_forward(
         best_train: Optional[Any] = None
         for combo in combos:
             candidate = _with_strategy(config, combo)
-            outcome = run_backtest(symbol, train_slice, candidate, market_histories)
-            if outcome.trades < min_train_trades:
+            outcome = _evaluate(symbol, train_slice, candidate, market_histories)
+            if len(outcome.trades) < min_train_trades:
                 continue
             if best_train is None or outcome.avg_r > best_train.avg_r:
                 best_train = outcome
                 best_params = combo
 
-        baseline_valid = run_backtest(
+        baseline_valid = _evaluate(
             symbol,
             valid_slice,
             _with_strategy(config, {}, strategy=baseline_strategy),
@@ -104,17 +124,19 @@ def walk_forward(
                     valid_avg_r=None,
                     valid_trades=0,
                     baseline_valid_avg_r=baseline_valid.avg_r,
-                    baseline_valid_trades=baseline_valid.trades,
+                    baseline_valid_trades=len(baseline_valid.trades),
                 )
             )
         else:
-            tuned_valid = run_backtest(
+            tuned_valid = _evaluate(
                 symbol,
                 valid_slice,
                 _with_strategy(config, best_params),
                 market_histories,
                 first_signal_bar=warmup_bars,
             )
+            if trade_sink is not None:
+                trade_sink.extend(tuned_valid.trades)
             folds.append(
                 FoldResult(
                     fold=fold_index,
@@ -123,11 +145,11 @@ def walk_forward(
                     valid_end=valid_end,
                     best_params=best_params,
                     train_avg_r=best_train.avg_r,
-                    train_trades=best_train.trades,
+                    train_trades=len(best_train.trades),
                     valid_avg_r=tuned_valid.avg_r,
-                    valid_trades=tuned_valid.trades,
+                    valid_trades=len(tuned_valid.trades),
                     baseline_valid_avg_r=baseline_valid.avg_r,
-                    baseline_valid_trades=baseline_valid.trades,
+                    baseline_valid_trades=len(baseline_valid.trades),
                 )
             )
 
@@ -180,8 +202,10 @@ def main() -> int:
             print(f"{symbol}: not enough daily history for walk-forward; skipped.")
             continue
         # 1y of free data (~250 bars) fits smaller windows than the defaults.
+        collected: list = []
         folds = walk_forward(
-            symbol, daily, config, market_histories, train_bars=150, valid_bars=50
+            symbol, daily, config, market_histories, train_bars=150, valid_bars=50,
+            trade_sink=collected,
         )
         print(f"=== {symbol} ===")
         for fold in folds:
@@ -198,6 +222,11 @@ def main() -> int:
             f"baseline_r={report['baseline_pooled_avg_r']} (n={report['baseline_valid_trades']})"
         )
         print(f"verdict: {report['verdict']}")
+        if collected:
+            from .attribution import attribution_report, format_report
+
+            print("--- attribution (tuned validation trades) ---")
+            print(format_report(attribution_report(collected, market_histories.get("SPY"))))
     return 0
 
 
