@@ -101,17 +101,27 @@ jobs:
       - name: Commit state if updated
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: |
-          if [ -n "$(git status --porcelain state/last_sent.json state/armed_plans.json docs/data)" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add state/last_sent.json
-            git add --ignore-errors state/armed_plans.json docs/data || true
-            git commit -m "Update send state, armed plans and dashboard data"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Existence-guarded adds: a path that does not exist yet (e.g.
+          # armed_plans.json before the first arming) must not abort the
+          # add - unmatched pathspecs are fatal and --ignore-errors does
+          # NOT cover them, which previously dropped docs/data silently.
+          for path in state/last_sent.json state/armed_plans.json docs/data memory; do
+            if [ -e "$path" ]; then
+              git add -A -- "$path"
+            fi
+          done
+          # The staging area is the single source of truth: an empty stage
+          # (e.g. force_send runs that change no state) is benign, not a
+          # failure. Push/rebase failures below remain fatal by design.
+          if git diff --cached --quiet; then
+            echo "No state changes to commit."
+          else
+            git commit -m "Update send state, armed plans, memory and dashboard data"
             echo "Rebasing onto origin/${GITHUB_REF_NAME} before push..."
             git pull --rebase origin "${GITHUB_REF_NAME}"
             echo "Pushing state update..."
             git push
             echo "State push complete."
-          else
-            echo "No state changes to commit."
           fi
