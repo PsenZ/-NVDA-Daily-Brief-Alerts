@@ -20,8 +20,9 @@ from .reporting import _trading_posture, format_dual_time
 
 logger = logging.getLogger(__name__)
 
-# v2: results[].evidence (structured, timestamped evidence trail).
-SCHEMA_VERSION = 2
+# v3: evidence items carry evidence_id/method/confidence/threshold/
+# observed_at (data time); item timestamp remains the export time.
+SCHEMA_VERSION = 3
 
 
 def build_brief_payload(

@@ -120,6 +120,19 @@ def analyze_symbol(
     else:  # test doubles may still return the legacy 3-tuple
         contributions, reasons, risks = scored
         evidence = []
+    # observed_at is the DATA time: scoring evidence derives from the last
+    # completed daily bar. News timestamps are not reliably available, so
+    # news items stay None rather than borrowing the bar time.
+    last_bar_iso = None
+    try:
+        last_bar_iso = daily.index[-1].isoformat()
+    except Exception:
+        pass
+    if last_bar_iso:
+        for item in evidence:
+            if getattr(item, "observed_at", None) is None and item.source != "news":
+                item.observed_at = last_bar_iso
+    gate_context: dict[str, dict] = {}
     raw_score = sum(contributions.values())
     score = int(max(0, min(100, round(raw_score))))
 
@@ -141,6 +154,10 @@ def analyze_symbol(
             "new entries are blocked inside the earnings blackout window."
         )
         suppressed_by.append("earnings_blackout")
+        gate_context["earnings_blackout"] = {
+            "value": days_to_earnings,
+            "threshold": blackout_days,
+        }
         action = "WATCH"
     if action in ACTIONABLE_ACTIONS and (profile.is_leveraged or profile.is_inverse):
         risks.append(
@@ -159,6 +176,11 @@ def analyze_symbol(
                 f"${profile.min_avg_dollar_volume:,.0f} liquidity floor."
             )
             suppressed_by.append("insufficient_liquidity")
+            gate_context["insufficient_liquidity"] = {
+                "value": round(avg_dollar_volume, 2),
+                "threshold": profile.min_avg_dollar_volume,
+                "observed_at": last_bar_iso,
+            }
             action = "WATCH"
     if action in ACTIONABLE_ACTIONS:
         preview_plan = preview_trade_plan(action, tech, config)
@@ -167,6 +189,10 @@ def analyze_symbol(
                 f"RR {preview_plan.rr:.2f} is below the minimum requirement {config.min_rr:.2f}."
             )
             suppressed_by.append("rr_below_min")
+            gate_context["rr_below_min"] = {
+                "value": preview_plan.rr,
+                "threshold": config.min_rr,
+            }
             action = "WATCH"
 
     signal_type = ACTION_TO_SIGNAL_TYPE[action]
@@ -200,8 +226,11 @@ def analyze_symbol(
     if warnings:
         risks.extend(warnings[:3])
 
-    # Every suppression code becomes a machine-readable gate evidence item.
-    evidence = list(evidence) + [gate_evidence(code) for code in suppressed_by]
+    # Every suppression code becomes a machine-readable gate evidence item,
+    # carrying the measured value and threshold captured at the veto site.
+    evidence = list(evidence) + [
+        gate_evidence(code, **gate_context.get(code, {})) for code in suppressed_by
+    ]
 
     result = _result(
         rank=0,
@@ -239,6 +268,14 @@ def assign_ranks(results: list[SignalResult]) -> list[SignalResult]:
 
 
 def enforce_portfolio_heat(results: list[SignalResult], max_heat_pct: float) -> list[SignalResult]:
+    """DEPRECATED (R3.5): no longer called by the production chain.
+
+    Global heat is now allocated inside decision_manager.apply_portfolio_manager
+    AFTER approval checks, so deferred candidates cannot consume it. This
+    function is kept only as a compatibility API for external callers/tests;
+    do not reintroduce it before apply_portfolio_manager - heat would then
+    be charged twice.
+    """
     heat_left = max_heat_pct
     for result in results:
         if not result.is_actionable:
@@ -302,12 +339,27 @@ def _result(
     data_quality: Optional[DataQuality] = None,
     evidence: Optional[list] = None,
 ) -> SignalResult:
-    # Identity only: symbol + action + setup. Score and price-derived plan
-    # fields drift on every data refresh, and a changed hash bypasses the
-    # alert cooldown ("signal_changed"), so including them made the cooldown
-    # ineffective exactly when the market was trending.
-    hash_input = f"{symbol}|{action}|{setup_type}"
-    signal_hash = hashlib.sha1(hash_input.encode("utf-8")).hexdigest()[:12]
+    # Two-level fingerprint (R3.5): identity says WHAT the signal is;
+    # material state says whether it changed in a way a human would care
+    # about. Material fields are BANDED - exact prices, scores and text
+    # never enter the hash, so intraday drift cannot bypass the cooldown,
+    # while a score-band jump, regime flip or re-banded stop distance can.
+    identity_input = f"{symbol}|{action}|{setup_type}"
+    identity_hash = hashlib.sha1(identity_input.encode("utf-8")).hexdigest()[:12]
+    material_input = "|".join(
+        [
+            identity_input,
+            _score_band(score),
+            market_regime,
+            _entry_distance_band(plan, last_price),
+            _stop_distance_band(plan),
+            _rr_band(plan.rr),
+        ]
+    )
+    material_state_hash = hashlib.sha1(material_input.encode("utf-8")).hexdigest()[:12]
+    # Back-compat: signal_hash aliases the material hash; old state records
+    # keyed on signal_hash keep working.
+    signal_hash = material_state_hash
     return SignalResult(
         rank=rank,
         symbol=symbol,
@@ -325,6 +377,8 @@ def _result(
         trade_plan=plan,
         alert_kind=alert_kind,
         signal_hash=signal_hash,
+        identity_hash=identity_hash,
+        material_state_hash=material_state_hash,
         last_price=last_price,
         raw_score=raw_score,
         warnings=warnings or [],
@@ -338,6 +392,54 @@ def _result(
         data_quality=data_quality or DataQuality(),
         evidence=evidence or [],
     )
+
+
+def _score_band(score: int) -> str:
+    if score >= 90:
+        return "90-100"
+    if score >= 80:
+        return "80-89"
+    if score >= 70:
+        return "70-79"
+    if score >= 60:
+        return "60-69"
+    if score >= 50:
+        return "50-59"
+    return "0-49"
+
+
+def _entry_distance_band(plan: TradePlan, last_price) -> str:
+    if plan.entry_low is None or plan.entry_high is None or not last_price:
+        return "na"
+    mid = (float(plan.entry_low) + float(plan.entry_high)) / 2
+    pct = (mid - float(last_price)) / float(last_price) * 100
+    return f"{round(pct)}pct"  # 1% buckets
+
+
+def _stop_distance_band(plan: TradePlan) -> str:
+    if plan.stop_price is None or plan.entry_low is None or plan.entry_high is None:
+        return "na"
+    mid = (float(plan.entry_low) + float(plan.entry_high)) / 2
+    if mid <= 0:
+        return "na"
+    pct = (mid - float(plan.stop_price)) / mid * 100
+    return f"{round(pct * 2) / 2}pct"  # 0.5% buckets
+
+
+def _rr_band(rr) -> str:
+    try:
+        value = float(rr)
+    except Exception:
+        return "na"
+    if value <= 0:
+        return "na"
+    if value < 1.5:
+        return "lt1.5"
+    if value < 2.0:
+        return "1.5-1.99"
+    if value < 3.0:
+        return "2.0-2.99"
+    return "3plus"
 
 
 def _derive_market_evidence(result: SignalResult, market: MarketContext) -> list[str]:

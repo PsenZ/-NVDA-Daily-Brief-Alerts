@@ -85,14 +85,27 @@ def should_send_alert(
     now_dt: datetime,
     cooldown_hours: int,
     signal_hash: str | None = None,
+    identity_hash: str | None = None,
 ) -> tuple[bool, str]:
+    """Cooldown with a two-level fingerprint (R3.5).
+
+    signal_hash carries the MATERIAL state (banded score/levels/regime);
+    identity_hash carries the signal's identity (symbol|action|setup).
+    Identity changes and material changes both bypass the cooldown; mere
+    price drift inside the bands does not. Legacy state records that only
+    stored signal_hash still work - the identity check is skipped.
+    """
     alert_state = state.get("alerts", {}).get(symbol, {}).get(alert_kind)
     if not alert_state:
         return True, "new_alert"
 
+    previous_identity = alert_state.get("identity_hash")
+    if identity_hash and previous_identity and identity_hash != previous_identity:
+        return True, "signal_identity_changed"
+
     previous_hash = alert_state.get("signal_hash")
     if signal_hash and previous_hash and signal_hash != previous_hash:
-        return True, "signal_changed"
+        return True, "signal_materially_changed"
 
     try:
         sent_at = datetime.fromisoformat(alert_state["sent_at"])

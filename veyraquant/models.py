@@ -117,6 +117,8 @@ class SignalResult:
     alert_kind: str
     signal_hash: str
     last_price: Optional[float]
+    identity_hash: str = ""
+    material_state_hash: str = ""
     raw_score: float = 0.0
     warnings: list[str] = field(default_factory=list)
     rejection_reasons: list[str] = field(default_factory=list)

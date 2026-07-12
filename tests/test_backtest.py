@@ -117,3 +117,36 @@ def test_backtest_net_avg_r_never_exceeds_gross():
     assert result.cost_bps == 50.0
     if result.trades > 0:
         assert result.avg_r <= result.avg_r_gross
+
+
+def test_backtest_uses_structural_fields_not_display_strings(monkeypatch):
+    """Garbled display text must not affect trading decisions (R3.5)."""
+    from veyraquant import trade_plan as tp_module
+    from veyraquant.models import TradePlan
+
+    real_build = tp_module._build_trade_plan
+
+    def garbled_display(action, tech, config):
+        plan = real_build(action, tech, config)
+        if plan.stop_price is None:
+            return plan
+        return TradePlan(
+            entry_zone="毫无意义的文本", stop="N/A garbage", targets="???",
+            position_pct=plan.position_pct, max_loss_pct=plan.max_loss_pct,
+            rr=plan.rr, trigger=plan.trigger, cancel=plan.cancel,
+            account_equity=plan.account_equity, position_value=plan.position_value,
+            entry_low=plan.entry_low, entry_high=plan.entry_high,
+            stop_price=plan.stop_price, target1=plan.target1, target2=plan.target2,
+        )
+
+    monkeypatch.setattr("veyraquant.signals.build_trade_plan", garbled_display)
+
+    daily = _frame(180, 100, 0.25)
+    bull = {name: _frame(180, 200, 0.5) for name in ("SPY", "QQQ", "SMH")}
+    result = run_backtest("NVDA", daily, make_config(), market_histories=bull)
+
+    # No parsing exception, and outcomes match the clean-display run exactly.
+    monkeypatch.setattr("veyraquant.signals.build_trade_plan", real_build)
+    clean = run_backtest("NVDA", daily, make_config(), market_histories=bull)
+    assert result.trades == clean.trades
+    assert result.avg_r == clean.avg_r

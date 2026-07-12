@@ -18,7 +18,7 @@ from .reporting import (
     compose_daily_report,
     compose_daily_report_html,
 )
-from .signals import analyze_symbol, assign_ranks, enforce_portfolio_heat
+from .signals import analyze_symbol, assign_ranks
 from .state import (
     already_sent_daily,
     mark_alert_sent,
@@ -182,8 +182,11 @@ def build_results(symbol_data_items: list[SymbolData], market, config: AppConfig
         for item in symbol_data_items
     ]
     ranked = assign_ranks(results)
-    heat_adjusted = enforce_portfolio_heat(ranked, config.portfolio_heat_max_pct)
-    reviewed, portfolio_notes = apply_portfolio_manager(heat_adjusted, market, config)
+    # Portfolio heat is allocated inside apply_portfolio_manager AFTER the
+    # approval checks (R3.5): pre-allocating it here let candidates that
+    # were later deferred shrink the positions of candidates that were
+    # ultimately approved.
+    reviewed, portfolio_notes = apply_portfolio_manager(ranked, market, config)
     return apply_position_context(reviewed, positions or {}), portfolio_notes
 
 
@@ -252,6 +255,7 @@ def maybe_send_entry_alerts(state, now_dt, results, config: AppConfig) -> bool:
             now_dt,
             config.alert_cooldown_hours,
             getattr(result, "signal_hash", None),
+            identity_hash=getattr(result, "identity_hash", None),
         )
         if not should_send:
             logger.info("Alert skipped due to cooldown: %s %s", result.symbol, result.alert_kind)
@@ -277,6 +281,7 @@ def maybe_send_entry_alerts(state, now_dt, results, config: AppConfig) -> bool:
             {
                 "score": result.score,
                 "signal_hash": result.signal_hash,
+                "identity_hash": getattr(result, "identity_hash", None),
                 "plan": {
                     "entry_zone": result.entry_zone,
                     "stop": result.stop,

@@ -79,23 +79,42 @@ def score_components(
         ev.reason("MOM_ADX_TREND", "ADX is above 25 with +DI leading, which supports trend persistence.", "momentum", 10, value=round(t["adx14"], 2))
     contributions["momentum"] = momentum
 
-    relative = 5.0
-    ev.info("RS_BASELINE", "Relative-strength baseline.", "relative_strength", 5.0)
+    # Relative strength is split (R3.5): broad market (vs SPY) and sector
+    # (vs the instrument's own sector benchmark). The old behavior compared
+    # against a SPY/QQQ average for every symbol and never actually
+    # compared the stock to its sector - only whether the sector ETF rose.
+    broad = 0.0
     spy_perf = _snapshot_perf(market, "SPY")
-    qqq_perf = _snapshot_perf(market, "QQQ")
-    benchmark_values = [value for value in (spy_perf, qqq_perf) if not math.isnan(value)]
-    benchmark = float(np.mean(benchmark_values)) if benchmark_values else float("nan")
-    if not math.isnan(t["perf20"]) and not math.isnan(benchmark):
-        spread = t["perf20"] - benchmark
-        clipped = float(np.clip(spread, -10, 10))
-        relative += clipped
-        if spread >= 3:
-            ev.reason("RS_SPREAD_OUTPERFORM", f"{symbol} is outperforming SPY/QQQ over the last 20 sessions.", "relative_strength", clipped, value=round(spread, 2))
-        elif spread <= -3:
-            ev.risk("RS_SPREAD_LAG", f"{symbol} is lagging SPY/QQQ over the last 20 sessions.", "relative_strength", clipped, value=round(spread, 2))
+    if not math.isnan(t["perf20"]) and not math.isnan(spy_perf):
+        broad_spread = t["perf20"] - spy_perf
+        if broad_spread >= 3:
+            broad += 6
+            ev.reason("RS_BROAD_OUTPERFORM", f"{symbol} is outperforming SPY over the last 20 sessions.", "relative_strength_broad", 6, value=round(broad_spread, 2))
+        elif broad_spread <= -3:
+            broad -= 6
+            ev.risk("RS_BROAD_LAG", f"{symbol} is lagging SPY over the last 20 sessions.", "relative_strength_broad", -6, value=round(broad_spread, 2))
         else:
-            ev.info("RS_SPREAD_NEUTRAL", "20-session performance spread vs SPY/QQQ.", "relative_strength", clipped, value=round(spread, 2))
-    contributions["relative_strength"] = relative
+            ev.info("RS_BROAD_NEUTRAL", "20-session performance is roughly in line with SPY.", "relative_strength_broad", 0.0, value=round(broad_spread, 2))
+    contributions["relative_strength_broad"] = broad
+
+    sector_rs = 0.0
+    bench_symbol = profile.sector_benchmark
+    if bench_symbol and bench_symbol != symbol:
+        bench_perf20 = _snapshot_perf(market, bench_symbol)
+        if math.isnan(t["perf20"]) or math.isnan(bench_perf20):
+            # Never fabricate a neutral score from missing data.
+            ev.info("RS_SECTOR_UNAVAILABLE", f"Sector benchmark {bench_symbol} data unavailable; no sector-relative scoring.", "relative_strength_sector", None, source="market")
+        else:
+            sector_spread = t["perf20"] - bench_perf20
+            if sector_spread >= 3:
+                sector_rs += 6
+                ev.reason("RS_SECTOR_OUTPERFORM", f"{symbol} is leading its sector benchmark {bench_symbol} over the last 20 sessions.", "relative_strength_sector", 6, source="market", value=round(sector_spread, 2))
+            elif sector_spread <= -3:
+                sector_rs -= 6
+                ev.risk("RS_SECTOR_LAG", f"{symbol} is lagging its sector benchmark {bench_symbol} over the last 20 sessions.", "relative_strength_sector", -6, source="market", value=round(sector_spread, 2))
+            else:
+                ev.info("RS_SECTOR_NEUTRAL", f"20-session performance is roughly in line with {bench_symbol}.", "relative_strength_sector", 0.0, source="market", value=round(sector_spread, 2))
+    contributions["relative_strength_sector"] = sector_rs
 
     volume = 0.0
     if t["vol_ratio_5"] >= s.score_vol_ratio_5_strong:

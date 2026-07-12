@@ -21,9 +21,12 @@ on:
 permissions:
   contents: write
 
+# Shared write-lock: daily and intraday both commit state/ and docs/data,
+# so every state-writing workflow serializes on the same group. A running
+# writer must never be cancelled mid-commit.
 concurrency:
-  group: veyraquant-${{ github.ref }}
-  cancel-in-progress: true
+  group: veyraquant-state-writer-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   send-brief:
@@ -104,8 +107,11 @@ jobs:
             git add state/last_sent.json
             git add --ignore-errors state/armed_plans.json docs/data || true
             git commit -m "Update send state, armed plans and dashboard data"
+            echo "Rebasing onto origin/${GITHUB_REF_NAME} before push..."
             git pull --rebase origin "${GITHUB_REF_NAME}"
+            echo "Pushing state update..."
             git push
+            echo "State push complete."
           else
             echo "No state changes to commit."
           fi

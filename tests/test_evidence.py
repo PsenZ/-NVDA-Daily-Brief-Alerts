@@ -94,3 +94,130 @@ def test_gate_evidence_unknown_code_still_produces_item():
     item = gate_evidence("some_future_code")
     assert item.code == "SOME_FUTURE_CODE"
     assert item.polarity == "risk" and item.component == "gate"
+
+
+# --- R3.5: broad vs sector relative strength ---
+
+def _rs(symbol, perf20, snapshots):
+    from veyraquant.models import MarketContext
+
+    market = MarketContext("risk-on", 10.0, ["x"], [], snapshots)
+    contributions, _r, _k, evidence = score_components(
+        symbol, full_snapshot(perf20=perf20), FundamentalsData(), None,
+        NewsBundle([], [], {"score": 0.0, "label": "x", "sample_size": 0}), market,
+    )
+    codes = {item.code for item in evidence}
+    return contributions, codes
+
+
+def test_sector_outperform_and_lag_are_relative_to_the_benchmark():
+    snaps = {"SPY": {"perf20": 2.0}, "SMH": {"perf20": 4.0}}
+    contributions, codes = _rs("NVDA", 10.0, snaps)   # +10 vs SMH +4 -> +6 spread
+    assert contributions["relative_strength_sector"] == 6
+    assert "RS_SECTOR_OUTPERFORM" in codes
+    assert contributions["relative_strength_broad"] == 6  # +10 vs SPY +2
+
+    contributions, codes = _rs("AMD", 4.0, {"SPY": {"perf20": 2.0}, "SMH": {"perf20": 10.0}})
+    assert contributions["relative_strength_sector"] == -6  # +4 vs SMH +10
+    assert "RS_SECTOR_LAG" in codes
+
+
+def test_non_tech_symbols_compare_to_their_own_sector_etf():
+    jpm, codes_jpm = _rs("JPM", 8.0, {"SPY": {"perf20": 2.0}, "XLF": {"perf20": 1.0}})
+    assert jpm["relative_strength_sector"] == 6
+    assert "RS_SECTOR_OUTPERFORM" in codes_jpm
+
+    xom, codes_xom = _rs("XOM", -2.0, {"SPY": {"perf20": 2.0}, "XLE": {"perf20": 5.0}})
+    assert xom["relative_strength_sector"] == -6
+    assert "RS_SECTOR_LAG" in codes_xom
+
+    meta, codes_meta = _rs("META", 5.0, {"SPY": {"perf20": 2.0}, "XLC": {"perf20": 4.0}})
+    assert meta["relative_strength_sector"] == 0
+    assert "RS_SECTOR_NEUTRAL" in codes_meta
+
+
+def test_no_sector_benchmark_means_broad_only():
+    contributions, codes = _rs("ZZZZ", 10.0, {"SPY": {"perf20": 2.0}})
+    assert contributions["relative_strength_broad"] == 6
+    assert contributions["relative_strength_sector"] == 0
+    assert not any(code.startswith("RS_SECTOR") for code in codes)
+
+
+def test_sector_etf_never_compares_to_itself():
+    contributions, codes = _rs("SMH", 8.0, {"SPY": {"perf20": 2.0}, "SMH": {"perf20": 8.0}})
+    assert contributions["relative_strength_sector"] == 0
+    assert not any(code.startswith("RS_SECTOR") for code in codes)
+
+
+def test_missing_benchmark_data_records_unavailable_without_scoring():
+    contributions, codes = _rs("NVDA", 10.0, {"SPY": {"perf20": 2.0}})  # no SMH snapshot
+    assert contributions["relative_strength_sector"] == 0
+    assert "RS_SECTOR_UNAVAILABLE" in codes
+
+
+def test_rs_split_keeps_point_sum_invariant():
+    fundamentals, options, news = rich_inputs()
+    snaps = {"SPY": {"perf20": 2.0}, "QQQ": {"perf20": 3.0}, "SMH": {"perf20": 4.0}}
+    from veyraquant.models import MarketContext
+
+    market = MarketContext("risk-on", 10.0, ["x"], [], snaps)
+    contributions, _r, _k, evidence = score_components(
+        "NVDA", full_snapshot(perf20=10.0), fundamentals, options, news, market
+    )
+    sums = defaultdict(float)
+    for item in evidence:
+        if item.points is not None:
+            sums[item.component] += item.points
+    for component, value in contributions.items():
+        assert abs(sums[component] - value) < 1e-9
+
+
+# --- R3.5: evidence metadata enrichment ---
+
+def test_evidence_id_is_deterministic_and_timestamp_free():
+    from veyraquant.evidence import EvidenceItem
+
+    a = EvidenceItem("MOM_RSI_HEALTHY", "RSI healthy.", "reason", "momentum", 10, value=58.0)
+    b = EvidenceItem("MOM_RSI_HEALTHY", "RSI healthy.", "reason", "momentum", 10, value=58.0,
+                     timestamp="2026-07-13T00:00:00")
+    c = EvidenceItem("MOM_RSI_HEALTHY", "RSI healthy.", "reason", "momentum", 10, value=61.0)
+    assert a.evidence_id == b.evidence_id          # export time never enters the id
+    assert a.evidence_id != c.evidence_id          # measured value does
+    assert a.method == "deterministic_rule"
+    assert a.confidence is None                    # numeric-or-None, not "rule"
+
+
+def test_gates_carry_value_threshold_and_observed_at(monkeypatch):
+    from veyraquant.models import FundamentalsData
+    from veyraquant.signals import analyze_symbol
+    from test_signal_consistency import (
+        breakout_snapshot, bullish_market, dummy_daily, make_config, news_bundle, score_result,
+    )
+
+    monkeypatch.setattr("veyraquant.signals.tech_summary", lambda _d: breakout_snapshot())
+    monkeypatch.setattr("veyraquant.signals.intraday_snapshot", lambda _i: None)
+    monkeypatch.setattr("veyraquant.signals.score_components", lambda *a, **k: score_result(72))
+
+    result = analyze_symbol(
+        "NVDA", dummy_daily(), None, FundamentalsData(days_to_earnings=1), None,
+        news_bundle(0.0), bullish_market(), make_config(),
+    )
+    gate = next(item for item in result.evidence if item.code == "EARNINGS_BLACKOUT")
+    assert gate.value == 1 and gate.threshold == 3  # measured vs rule boundary
+
+
+def test_observed_at_uses_bar_time_not_export_time(monkeypatch):
+    from veyraquant.models import FundamentalsData
+    from veyraquant.signals import analyze_symbol
+    from test_signal_consistency import bullish_market, dummy_daily, make_config, news_bundle
+
+    daily = dummy_daily()
+    result = analyze_symbol(
+        "NVDA", daily, None, FundamentalsData(), None,
+        news_bundle(0.5), bullish_market(), make_config(),
+    )
+    bar_iso = daily.index[-1].isoformat()
+    technical = [i for i in result.evidence if i.source == "technical" and i.points]
+    news_items = [i for i in result.evidence if i.source == "news"]
+    assert technical and all(i.observed_at == bar_iso for i in technical)
+    assert news_items and all(i.observed_at is None for i in news_items)
