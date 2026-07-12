@@ -219,6 +219,12 @@ class AppConfig:
     backtest_cost_bps: float = 10.0
     export_dir: str = os.path.join("docs", "data")
     instruments_path: str = os.path.join("config", "instruments.json")
+    # R7 lite: correlation-aware sizing. Candidates whose return correlation
+    # with an already-approved name meets the threshold get their size
+    # scaled by the haircut factor before the heat allocation runs.
+    corr_lookback_days: int = 60
+    corr_threshold: float = 0.85
+    corr_haircut_factor: float = 0.5
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -305,4 +311,7 @@ class AppConfig:
             instruments_path=os.getenv(
                 "INSTRUMENTS_PATH", os.path.join("config", "instruments.json")
             ),
+            corr_lookback_days=_int_env("CORR_LOOKBACK_DAYS", 60),
+            corr_threshold=_float_env("CORR_THRESHOLD", 0.85),
+            corr_haircut_factor=_float_env("CORR_HAIRCUT_FACTOR", 0.5),
         )
