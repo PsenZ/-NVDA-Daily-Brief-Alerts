@@ -472,3 +472,11 @@ workflow 会校验这个 Secret 是否为合法 JSON，在运行时临时写入�
 This is a rules-based research assistant, not a statistically validated alpha model. Reports, alerts, backtests, and decision-review outputs are diagnostic tools and should not be treated as proof of future performance.
 
 本项目是规则型研究助手，不是经过统计验证的 alpha 模型。日报、提醒、回测和决策复盘都属于诊断工具，不应被视为未来收益的证明。
+
+## Dashboard & Operations / 驾驶舱与运维
+
+- **Dashboard / 驾驶舱**: static site under `docs/`, fed by `docs/data/*.json` exported after every real nightly send. Enable GitHub Pages: Settings → Pages → Deploy from a branch → `main` + `/docs`. URL: `https://<owner>.github.io/veyraquant/`. The committed seed data (marked "sample") renders until the first real export overwrites it.
+- **驾驶舱**：`docs/` 下的纯静态站点，读取每次夜间真实发送后导出的 `docs/data/*.json`。开启方式：Settings → Pages → Deploy from a branch → `main` + `/docs`。首次真实导出前显示"样例数据"。
+- **Watchlist via Variables / 用 Variables 配股票池**: set repository Variables (Settings → Secrets and variables → Actions → Variables): `SYMBOLS`, `MARKET_SYMBOLS`, optional `SECTOR_MAP_JSON` / `SECTOR_RISK_LIMITS_JSON` / `SECTOR_POSITION_LIMITS_JSON`. Unset variables fall back to the defaults in `daily.yml` — no YAML edit needed to change the watchlist.
+- **Workflows / 调度**: `daily.yml` runs the full pipeline nightly after the US close (brief email + armed plans + dashboard export); `intraday.yml` checks frozen plan levels every 10 minutes during US regular hours and alerts once per plan on trigger/invalidation; `ci.yml` runs pytest + compileall on every push/PR.
+- **Research CLIs / 研究工具**: `python -m veyraquant.memory_review` (decision-log statistics with t-stats and horizon comparison), `python walkforward.py` (out-of-sample threshold evaluation, net of costs).

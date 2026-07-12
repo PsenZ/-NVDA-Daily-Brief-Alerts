@@ -36,6 +36,18 @@
    }
   }
  },
+ "meta": {
+  "market_symbols": [
+   "SPY",
+   "QQQ",
+   "SMH",
+   "^VIX"
+  ],
+  "symbols": [
+   "NVDA",
+   "MSFT"
+  ]
+ },
  "portfolio_notes": [
   "Neutral market regime caps approved trades to 3."
  ],
@@ -114,10 +126,8 @@
    "contributions": {
     "base": 35.0,
     "discipline": 7.0,
-    "event_risk": 0.0,
     "market_environment": 11.0,
     "momentum": -6.0,
-    "news_sentiment": 0.0,
     "relative_strength": 2.0,
     "sector_resonance": 3.0,
     "trend": 8.0,
@@ -222,7 +232,8 @@
   {
    "action": "RISK_REDUCE",
    "bear_case": [
-    "bear case"
+    "RSI overheated above 74.",
+    "Price extended far above MA5."
    ],
    "bull_case": [
     "bull case"
@@ -263,13 +274,73 @@
     "reason a",
     "reason b"
    ],
-   "risks": [],
+   "risks": [
+    "RSI overheated above 74.",
+    "Price extended far above MA5."
+   ],
    "score": 38,
    "setup_type": "risk_reduce",
    "signal_type": "risk_reduce",
    "suggested_posture": "monitor-only",
    "suppressed_by": [],
    "symbol": "TSLA",
+   "validation_warnings": []
+  },
+  {
+   "action": "REJECT",
+   "bear_case": [
+    "bear case"
+   ],
+   "bull_case": [
+    "bull case"
+   ],
+   "contributions": {
+    "trend": 10.0
+   },
+   "conviction_level": "low",
+   "data_quality_level": "MEDIUM",
+   "decision_balance": "mixed",
+   "is_actionable": false,
+   "last_price": 100.0,
+   "market_evidence": [
+    "QQQ remains above SMA20."
+   ],
+   "plan": {
+    "cancel": "cancel if invalidated",
+    "entry_high": null,
+    "entry_low": null,
+    "entry_zone": "NA",
+    "max_loss_pct": 0.0,
+    "position_pct": 0.0,
+    "rr": 0.0,
+    "stop": "NA",
+    "stop_price": null,
+    "target1": null,
+    "target2": null,
+    "targets": "NA",
+    "trigger": "wait for trigger"
+   },
+   "portfolio_decision": "rejected",
+   "portfolio_reason": "Blocked before approval.",
+   "position_context": "No open position.",
+   "rank": 1,
+   "rating": "No Trade",
+   "raw_score": 40.0,
+   "reasons": [
+    "reason a",
+    "reason b"
+   ],
+   "risks": [
+    "Entry zone width 6.5% exceeds rejection threshold 6.0%."
+   ],
+   "score": 40,
+   "setup_type": "wait",
+   "signal_type": "wait",
+   "suggested_posture": "monitor-only",
+   "suppressed_by": [
+    "trade_plan_validation_failed"
+   ],
+   "symbol": "AMD",
    "validation_warnings": []
   }
  ],
@@ -281,7 +352,7 @@
  "summary": {
   "approved": 1,
   "deferred": 1,
-  "rejected": 0,
+  "rejected": 1,
   "risk_actions": 1,
   "trading_posture": "Selective execution",
   "watchlist": 1
