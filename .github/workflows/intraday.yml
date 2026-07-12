@@ -51,16 +51,22 @@ jobs:
       - name: Commit armed plan state if updated
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: |
-          if [ -n "$(git status --porcelain state/armed_plans.json docs/data/armed_plans.json)" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add --ignore-errors state/armed_plans.json docs/data/armed_plans.json || true
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Existence-guarded adds: unmatched pathspecs are fatal and
+          # --ignore-errors does not cover them (see daily.yml).
+          for path in state/armed_plans.json docs/data/armed_plans.json; do
+            if [ -e "$path" ]; then
+              git add -A -- "$path"
+            fi
+          done
+          if git diff --cached --quiet; then
+            echo "No armed plan changes to commit."
+          else
             git commit -m "Update armed plan state"
             echo "Rebasing onto origin/${GITHUB_REF_NAME} before push..."
             git pull --rebase origin "${GITHUB_REF_NAME}"
             echo "Pushing armed plan state..."
             git push
             echo "State push complete."
-          else
-            echo "No armed plan changes to commit."
           fi
