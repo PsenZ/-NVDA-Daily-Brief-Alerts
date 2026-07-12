@@ -145,3 +145,5 @@ class SignalResult:
     sector_risk_after: float = 0.0
     sector_position_after: float = 0.0
     data_quality: DataQuality = field(default_factory=DataQuality)
+    # list[EvidenceItem]; typed loosely so models stays a dependency leaf.
+    evidence: list = field(default_factory=list)

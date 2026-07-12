@@ -5,6 +5,7 @@ import numpy as np
 
 from .config import StrategyConfig
 from .constants import MARKET_RISK_OFF, MARKET_RISK_ON
+from .evidence import EvidenceCollector, EvidenceItem
 from .instruments import InstrumentProfile, default_profile
 from .models import FundamentalsData, MarketContext, NewsBundle, OptionsData, TechSnapshot
 
@@ -19,131 +20,145 @@ def score_components(
     social_sentiment_threshold: float = 0.15,
     strategy: Optional[StrategyConfig] = None,
     profile: Optional[InstrumentProfile] = None,
-) -> tuple[dict[str, float], list[str], list[str]]:
+) -> tuple[dict[str, float], list[str], list[str], list[EvidenceItem]]:
+    """Score a symbol; returns (contributions, reasons, risks, evidence).
+
+    All narrative strings are routed through the EvidenceCollector so the
+    reasons/risks lists stay byte-identical to the legacy output while
+    every point carries a machine-readable evidence item. Invariant: per
+    component, sum(evidence points) == contribution value.
+    """
     s = strategy or StrategyConfig()
     profile = profile or default_profile(symbol)
     t = tech.values
     contributions: dict[str, float] = {}
-    reasons: list[str] = []
-    risks: list[str] = []
+    ev = EvidenceCollector()
 
     trend = 0.0
     if t["sma5"] >= t["sma10"] >= t["sma20"]:
         trend += 10
-        reasons.append("Short moving averages are stacked higher, supporting a trend-following bias.")
+        ev.reason("TREND_MA_STACK", "Short moving averages are stacked higher, supporting a trend-following bias.", "trend", 10)
     if t["last"] > t["sma20"] > t["sma50"]:
         trend += 18
-        reasons.append("Price remains above SMA20 and SMA50, keeping the intermediate trend constructive.")
+        ev.reason("TREND_ABOVE_SMA20_50", "Price remains above SMA20 and SMA50, keeping the intermediate trend constructive.", "trend", 18)
     elif t["last"] > t["sma20"]:
         trend += 8
-        reasons.append("Price still holds above SMA20, but trend strength needs more proof.")
+        ev.reason("TREND_ABOVE_SMA20_ONLY", "Price still holds above SMA20, but trend strength needs more proof.", "trend", 8)
     else:
         trend -= 8
-        risks.append("Price has slipped back below SMA20 and trend persistence is weakening.")
+        ev.risk("TREND_BELOW_SMA20", "Price has slipped back below SMA20 and trend persistence is weakening.", "trend", -8)
     if not math.isnan(t["sma200"]) and t["last"] > t["sma200"]:
         trend += 8
-        reasons.append("Price is still above SMA200, keeping the long-term structure supportive.")
+        ev.reason("TREND_ABOVE_SMA200", "Price is still above SMA200, keeping the long-term structure supportive.", "trend", 8)
     if t["last"] >= t["high_55"] * 0.98:
         trend += 6
-        reasons.append("Price is trading near the 55-day high, which supports a trend continuation read.")
+        ev.reason("TREND_NEAR_55D_HIGH", "Price is trading near the 55-day high, which supports a trend continuation read.", "trend", 6)
     contributions["trend"] = trend
 
     momentum = 0.0
     if t["macd"] > t["signal"] and t["macd_hist"] > t["macd_hist_prev"]:
         momentum += 12
-        reasons.append("MACD is above signal and the histogram is expanding, showing improving momentum.")
+        ev.reason("MOM_MACD_EXPANDING", "MACD is above signal and the histogram is expanding, showing improving momentum.", "momentum", 12)
     elif t["macd"] > t["signal"]:
         momentum += 6
+        ev.info("MOM_MACD_ABOVE_SIGNAL", "MACD above signal without histogram expansion.", "momentum", 6)
     else:
         momentum -= 6
-        risks.append("MACD has rolled under the signal line and momentum is softer.")
+        ev.risk("MOM_MACD_BELOW_SIGNAL", "MACD has rolled under the signal line and momentum is softer.", "momentum", -6)
     if s.score_rsi_healthy_min <= t["rsi14"] <= s.score_rsi_healthy_max:
         momentum += 10
-        reasons.append("RSI remains in a healthy range without obvious overheating.")
+        ev.reason("MOM_RSI_HEALTHY", "RSI remains in a healthy range without obvious overheating.", "momentum", 10, value=round(t["rsi14"], 2))
     elif t["rsi14"] > s.score_rsi_overheat:
         momentum -= 7
-        risks.append("RSI is stretched and the reward for chasing is worse.")
+        ev.risk("MOM_RSI_OVERHEATED", "RSI is stretched and the reward for chasing is worse.", "momentum", -7, value=round(t["rsi14"], 2))
     elif t["rsi14"] < s.score_rsi_weak:
         momentum -= 10
-        risks.append("RSI is weak, showing limited demand support.")
+        ev.risk("MOM_RSI_WEAK", "RSI is weak, showing limited demand support.", "momentum", -10, value=round(t["rsi14"], 2))
     if t["adx14"] >= s.score_adx_trend_min and t["plus_di"] > t["minus_di"]:
         momentum += 10
-        reasons.append("ADX is above 25 with +DI leading, which supports trend persistence.")
+        ev.reason("MOM_ADX_TREND", "ADX is above 25 with +DI leading, which supports trend persistence.", "momentum", 10, value=round(t["adx14"], 2))
     contributions["momentum"] = momentum
 
     relative = 5.0
+    ev.info("RS_BASELINE", "Relative-strength baseline.", "relative_strength", 5.0)
     spy_perf = _snapshot_perf(market, "SPY")
     qqq_perf = _snapshot_perf(market, "QQQ")
     benchmark_values = [value for value in (spy_perf, qqq_perf) if not math.isnan(value)]
     benchmark = float(np.mean(benchmark_values)) if benchmark_values else float("nan")
     if not math.isnan(t["perf20"]) and not math.isnan(benchmark):
         spread = t["perf20"] - benchmark
-        relative += float(np.clip(spread, -10, 10))
+        clipped = float(np.clip(spread, -10, 10))
+        relative += clipped
         if spread >= 3:
-            reasons.append(f"{symbol} is outperforming SPY/QQQ over the last 20 sessions.")
+            ev.reason("RS_SPREAD_OUTPERFORM", f"{symbol} is outperforming SPY/QQQ over the last 20 sessions.", "relative_strength", clipped, value=round(spread, 2))
         elif spread <= -3:
-            risks.append(f"{symbol} is lagging SPY/QQQ over the last 20 sessions.")
+            ev.risk("RS_SPREAD_LAG", f"{symbol} is lagging SPY/QQQ over the last 20 sessions.", "relative_strength", clipped, value=round(spread, 2))
+        else:
+            ev.info("RS_SPREAD_NEUTRAL", "20-session performance spread vs SPY/QQQ.", "relative_strength", clipped, value=round(spread, 2))
     contributions["relative_strength"] = relative
 
     volume = 0.0
     if t["vol_ratio_5"] >= s.score_vol_ratio_5_strong:
         volume += 12
-        reasons.append("Volume is running above twice the 5-day average, which improves breakout confirmation.")
+        ev.reason("VOL_SURGE_5D", "Volume is running above twice the 5-day average, which improves breakout confirmation.", "volume", 12, value=round(t["vol_ratio_5"], 2))
     elif t["vol_ratio"] >= s.score_vol_ratio_strong:
         volume += 10
-        reasons.append("Volume is clearly above the 20-day average, supporting signal confirmation.")
+        ev.reason("VOL_ABOVE_20D", "Volume is clearly above the 20-day average, supporting signal confirmation.", "volume", 10, value=round(t["vol_ratio"], 2))
     elif t["vol_ratio"] >= s.score_vol_ratio_moderate:
         volume += 5
-        reasons.append("Volume is modestly above average.")
+        ev.reason("VOL_MODEST", "Volume is modestly above average.", "volume", 5, value=round(t["vol_ratio"], 2))
     elif t["vol_ratio_5"] < s.score_vol_ratio_light:
         volume += 4
-        reasons.append("The pullback is happening on lighter 5-day volume, which fits a constructive retracement.")
+        ev.reason("VOL_LIGHT_PULLBACK", "The pullback is happening on lighter 5-day volume, which fits a constructive retracement.", "volume", 4, value=round(t["vol_ratio_5"], 2))
     elif t["vol_ratio"] < s.score_vol_ratio_light:
         volume -= 4
-        risks.append("Volume is below average and the breakout confirmation is weak.")
+        ev.risk("VOL_WEAK", "Volume is below average and the breakout confirmation is weak.", "volume", -4, value=round(t["vol_ratio"], 2))
     contributions["volume"] = volume
 
     vol_opt = 5.0
+    ev.info("VOLOPT_BASELINE", "Volatility/options baseline.", "volatility_options", 5.0)
     if t["atr_pct"] > 6:
         vol_opt -= 6
-        risks.append("ATR as a percent of price is elevated, so position size should stay tighter.")
+        ev.risk("VOLOPT_ATR_ELEVATED", "ATR as a percent of price is elevated, so position size should stay tighter.", "volatility_options", -6, value=round(t["atr_pct"], 2))
     if options and options.iv_mid is not None:
         if options.iv_mid >= 0.65:
             vol_opt -= 8
-            risks.append("Implied volatility is elevated, pointing to heavier event risk.")
+            ev.risk("OPT_IV_HIGH", "Implied volatility is elevated, pointing to heavier event risk.", "volatility_options", -8, source="options", value=round(float(options.iv_mid), 3))
         elif options.iv_mid <= 0.4:
             vol_opt += 3
+            ev.info("OPT_IV_LOW", "Implied volatility is subdued.", "volatility_options", 3, source="options", value=round(float(options.iv_mid), 3))
     if options and options.put_call_vol is not None:
         if options.put_call_vol >= 1.3:
             vol_opt -= 5
-            risks.append("Put/Call volume is elevated and options sentiment is cautious.")
+            ev.risk("OPT_PC_BEARISH", "Put/Call volume is elevated and options sentiment is cautious.", "volatility_options", -5, source="options", value=round(float(options.put_call_vol), 2))
         elif options.put_call_vol <= 0.7:
             vol_opt += 4
-            reasons.append("Put/Call volume is supportive of a more constructive bias.")
+            ev.reason("OPT_PC_SUPPORTIVE", "Put/Call volume is supportive of a more constructive bias.", "volatility_options", 4, source="options", value=round(float(options.put_call_vol), 2))
     contributions["volatility_options"] = vol_opt
 
     sentiment = 0.0
     social_score = news.social_sentiment.get("score", 0.0)
     if social_score >= social_sentiment_threshold:
         sentiment += 8
-        reasons.append("Headline and social sentiment remain constructive.")
+        ev.reason("NEWS_SENT_POSITIVE", "Headline and social sentiment remain constructive.", "news_sentiment", 8, source="news", value=round(float(social_score), 3))
     elif social_score <= -social_sentiment_threshold:
         sentiment -= 8
-        risks.append("Headline and social sentiment are leaning negative.")
+        ev.risk("NEWS_SENT_NEGATIVE", "Headline and social sentiment are leaning negative.", "news_sentiment", -8, source="news", value=round(float(social_score), 3))
     if news.news:
         sentiment += 2
+        ev.info("NEWS_COVERAGE", "Recent news coverage exists.", "news_sentiment", 2, source="news", value=len(news.news))
     contributions["news_sentiment"] = sentiment
 
     discipline = 0.0
     if t["dist_ma5_pct"] > s.score_dist_ma5_extended_pct:
         discipline -= 8
-        risks.append("Price is too extended above MA5 and chasing becomes harder to justify.")
+        ev.risk("DISC_EXTENDED_MA5", "Price is too extended above MA5 and chasing becomes harder to justify.", "discipline", -8, value=round(t["dist_ma5_pct"], 2))
     elif 0 <= t["dist_ma5_pct"] <= 2:
         discipline += 4
-        reasons.append("Price is still close to MA5, keeping the entry rhythm healthier.")
+        ev.reason("DISC_NEAR_MA5", "Price is still close to MA5, keeping the entry rhythm healthier.", "discipline", 4, value=round(t["dist_ma5_pct"], 2))
     if abs(t["dist_ma10_pct"]) <= 2:
         discipline += 3
-        reasons.append("Price is still close to MA10, which keeps the pullback support clearer.")
+        ev.reason("DISC_NEAR_MA10", "Price is still close to MA10, which keeps the pullback support clearer.", "discipline", 3, value=round(t["dist_ma10_pct"], 2))
     contributions["discipline"] = discipline
 
     sector = 0.0
@@ -151,37 +166,38 @@ def score_components(
         bench_perf = _snapshot_perf(market, profile.sector_benchmark)
         if not math.isnan(bench_perf) and bench_perf > 0:
             sector += 4
-            reasons.append(
-                f"{profile.sector_benchmark} sector strength is supporting follow-through."
-            )
+            ev.reason("SECTOR_BENCH_STRONG", f"{profile.sector_benchmark} sector strength is supporting follow-through.", "sector_resonance", 4, source="market", value=round(bench_perf, 2))
     if profile.qqq_sensitive:
-        qqq_perf = _snapshot_perf(market, "QQQ")
-        if not math.isnan(qqq_perf) and qqq_perf > 0:
+        qqq_sector_perf = _snapshot_perf(market, "QQQ")
+        if not math.isnan(qqq_sector_perf) and qqq_sector_perf > 0:
             sector += 3
-            reasons.append("QQQ remains constructive, which helps growth exposure.")
+            ev.reason("SECTOR_QQQ_TAILWIND", "QQQ remains constructive, which helps growth exposure.", "sector_resonance", 3, source="market", value=round(qqq_sector_perf, 2))
     contributions["sector_resonance"] = sector
 
     event_risk = 0.0
     recommendation = fundamentals.recommendation_key
     if recommendation in {"buy", "strong_buy"}:
         event_risk += 4
+        ev.info("FUND_RECO_BUY", "Street consensus leans buy.", "event_risk", 4, source="fundamental", value=str(recommendation))
     elif recommendation in {"sell", "underperform"}:
         event_risk -= 8
-        risks.append("Street expectations are not aligned with aggressive upside exposure.")
+        ev.risk("FUND_RECO_SELL", "Street expectations are not aligned with aggressive upside exposure.", "event_risk", -8, source="fundamental", value=str(recommendation))
     if fundamentals.revenue_growth is not None and fundamentals.revenue_growth < 0:
         event_risk -= 4
-        risks.append("Revenue growth is negative and the fundamental impulse needs more proof.")
+        ev.risk("FUND_REVENUE_NEGATIVE", "Revenue growth is negative and the fundamental impulse needs more proof.", "event_risk", -4, source="fundamental", value=round(float(fundamentals.revenue_growth), 4))
     contributions["event_risk"] = event_risk
 
     market_score = float(np.clip(market.score, -15, 15))
     contributions["market_environment"] = market_score
+    ev.info("MARKET_ENV_SCORE", "Market-environment score (clipped).", "market_environment", market_score, source="market", value=round(float(market.score), 2))
     if market.label == MARKET_RISK_ON:
-        reasons.append("The market filter remains in a risk-on state.")
+        ev.reason("MARKET_RISK_ON_NOTE", "The market filter remains in a risk-on state.", "market_environment", None, source="market")
     elif market.label == MARKET_RISK_OFF:
-        risks.append("The market filter is in risk-off mode and reduces aggressive execution.")
+        ev.risk("MARKET_RISK_OFF_NOTE", "The market filter is in risk-off mode and reduces aggressive execution.", "market_environment", None, source="market")
 
     contributions["base"] = s.score_base
-    return contributions, reasons, risks
+    ev.info("BASE_SCORE", "Base score.", "base", s.score_base)
+    return contributions, ev.reasons, ev.risks, ev.items
 
 
 def _snapshot_perf(market: MarketContext, symbol: str) -> float:
