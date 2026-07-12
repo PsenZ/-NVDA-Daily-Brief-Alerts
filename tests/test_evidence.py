@@ -221,3 +221,182 @@ def test_observed_at_uses_bar_time_not_export_time(monkeypatch):
     news_items = [i for i in result.evidence if i.source == "news"]
     assert technical and all(i.observed_at == bar_iso for i in technical)
     assert news_items and all(i.observed_at is None for i in news_items)
+
+
+# --- R3.5.1: source-specific observed_at ---
+
+def _analyze_with(fundamentals=None, options=None, news=None, daily=None, monkeypatch=None, symbol="NVDA", profile=None):
+    from veyraquant.signals import analyze_symbol
+    from test_signal_consistency import bullish_market, dummy_daily, make_config, news_bundle
+
+    return analyze_symbol(
+        symbol, dummy_daily() if daily is None else daily, None,
+        fundamentals or FundamentalsData(), options,
+        news or news_bundle(0.0), bullish_market(), make_config(), profile=profile,
+    )
+
+
+def test_options_evidence_uses_fetch_time_never_bar_time():
+    opts = OptionsData("2026-08-21", 0.8, 1.5, 0.7, fetched_at="2026-07-12T01:02:03+00:00")
+    result = _analyze_with(options=opts)
+    option_items = [i for i in result.evidence if i.source == "options"]
+    assert option_items
+    assert all(i.observed_at == "2026-07-12T01:02:03+00:00" for i in option_items)
+
+    stale = OptionsData("2026-08-21", 0.8, 1.5, 0.7)  # no fetched_at
+    result = _analyze_with(options=stale)
+    option_items = [i for i in result.evidence if i.source == "options"]
+    assert option_items and all(i.observed_at is None for i in option_items)
+
+
+def test_fundamental_evidence_uses_fetch_time_or_none():
+    funda = FundamentalsData(recommendation_key="sell", fetched_at="2026-07-12T02:00:00+00:00")
+    result = _analyze_with(fundamentals=funda)
+    items = [i for i in result.evidence if i.source == "fundamental" and i.component != "gate"]
+    assert items and all(i.observed_at == "2026-07-12T02:00:00+00:00" for i in items)
+
+    legacy = FundamentalsData(recommendation_key="sell")  # legacy cache: no fetched_at
+    result = _analyze_with(fundamentals=legacy)
+    items = [i for i in result.evidence if i.source == "fundamental" and i.component != "gate"]
+    assert items and all(i.observed_at is None for i in items)
+
+
+def test_earnings_gate_observed_at_follows_fundamentals_fetch_time(monkeypatch):
+    from test_signal_consistency import breakout_snapshot, score_result
+
+    monkeypatch.setattr("veyraquant.signals.tech_summary", lambda _d: breakout_snapshot())
+    monkeypatch.setattr("veyraquant.signals.intraday_snapshot", lambda _i: None)
+    monkeypatch.setattr("veyraquant.signals.score_components", lambda *a, **k: score_result(72))
+
+    with_time = _analyze_with(
+        fundamentals=FundamentalsData(days_to_earnings=1, fetched_at="2026-07-12T02:00:00+00:00")
+    )
+    gate = next(i for i in with_time.evidence if i.code == "EARNINGS_BLACKOUT")
+    assert gate.observed_at == "2026-07-12T02:00:00+00:00"
+
+    without_time = _analyze_with(fundamentals=FundamentalsData(days_to_earnings=1))
+    gate = next(i for i in without_time.evidence if i.code == "EARNINGS_BLACKOUT")
+    assert gate.observed_at is None
+
+
+def test_liquidity_gate_keeps_daily_bar_time(monkeypatch):
+    from dataclasses import replace
+    from veyraquant.instruments import default_profile
+    from test_signal_consistency import breakout_snapshot, dummy_daily, score_result
+
+    monkeypatch.setattr("veyraquant.signals.tech_summary", lambda _d: breakout_snapshot())
+    monkeypatch.setattr("veyraquant.signals.intraday_snapshot", lambda _i: None)
+    monkeypatch.setattr("veyraquant.signals.score_components", lambda *a, **k: score_result(72))
+
+    thin = dummy_daily()
+    thin["Volume"] = 100.0
+    result = _analyze_with(daily=thin, profile=replace(default_profile("ZZZZ")))
+    gate = next(i for i in result.evidence if i.code == "INSUFFICIENT_LIQUIDITY")
+    assert gate.observed_at == thin.index[-1].isoformat()  # daily-derived gate
+
+
+def test_market_evidence_has_no_borrowed_timestamp():
+    result = _analyze_with()
+    market_items = [i for i in result.evidence if i.source == "market" and i.component != "gate"]
+    assert market_items
+    assert all(i.observed_at is None for i in market_items)
+
+
+def test_fundamentals_cache_roundtrips_fetched_at(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from veyraquant.data import DataClient
+    from test_data import make_config as data_config
+
+    client = DataClient(data_config(tmp_path))
+
+    class LiveTicker:
+        info = {"marketCap": 1};  calendar = None
+
+    live = client.fetch_fundamentals("NVDA", LiveTicker(), [])
+    assert live.fetched_at is not None
+
+    # Cache read (ticker None) must report the ORIGINAL fetch time.
+    cached = client.fetch_fundamentals("NVDA", None, [])
+    assert cached.fetched_at == live.fetched_at
+
+    # Legacy cache without _fetched_at -> None, no crash.
+    legacy_path = client.cache_dir / "OLD_fundamentals.json"
+    legacy_path.write_text('{"marketCap": 5}', encoding="utf-8")
+    legacy = client.fetch_fundamentals("OLD", None, [])
+    assert legacy.fetched_at is None and legacy.market_cap == 5
+
+
+# --- R3.5.1: correlated sector-context cap ---
+
+def _cap_run(symbol, perf20, snapshots, strategy=None):
+    from veyraquant.models import MarketContext
+
+    market = MarketContext("risk-on", 10.0, ["x"], [], snapshots)
+    return score_components(
+        symbol, full_snapshot(perf20=perf20), FundamentalsData(), None,
+        NewsBundle([], [], {"score": 0.0, "label": "x", "sample_size": 0}),
+        market, strategy=strategy,
+    )
+
+
+FULL_STACK = {"SPY": {"perf20": 2.0}, "QQQ": {"perf20": 3.0}, "SMH": {"perf20": 4.0}}
+
+
+def test_cap_leaves_totals_within_limit_untouched():
+    # sector RS +6, resonance +4 (no QQQ snapshot) -> total 10, no cut.
+    snaps = {"SPY": {"perf20": 2.0}, "SMH": {"perf20": 4.0}}
+    contributions, _r, _k, evidence = _cap_run("NVDA", 10.0, snaps)
+    assert contributions["relative_strength_sector"] == 6
+    assert contributions["sector_resonance"] == 4
+    assert not any(i.code == "SECTOR_CONTEXT_CAP_APPLIED" for i in evidence)
+
+
+def test_cap_trims_resonance_first_and_totals_hit_cap_exactly():
+    # sector RS +6, resonance +7 -> 13, cap 10 -> resonance trimmed to 4.
+    contributions, _r, _k, evidence = _cap_run("NVDA", 10.0, FULL_STACK)
+    assert contributions["relative_strength_sector"] == 6   # alpha signal intact
+    assert contributions["sector_resonance"] == 4           # tailwinds absorbed the cut
+    cap_items = [i for i in evidence if i.code == "SECTOR_CONTEXT_CAP_APPLIED"]
+    assert len(cap_items) == 1
+    assert cap_items[0].points == -3
+    assert cap_items[0].value == 13 and cap_items[0].threshold == 10.0
+
+
+def test_negative_sector_rs_is_never_offset_by_the_cap():
+    # sector RS -6 (lagging), resonance +7 -> net +1, no capping involved.
+    contributions, _r, _k, evidence = _cap_run("AMD", -8.0, FULL_STACK)
+    # AMD: perf -8 vs SMH +4 -> spread -12 -> RS -6; resonance bench-only +4.
+    assert contributions["relative_strength_sector"] == -6
+    assert contributions["sector_resonance"] == 4
+    assert not any(i.code == "SECTOR_CONTEXT_CAP_APPLIED" for i in evidence)
+
+
+def test_cap_is_configurable_and_can_trim_into_sector_rs():
+    from veyraquant.config import StrategyConfig
+
+    strict = StrategyConfig(score_sector_context_cap=4.0)
+    contributions, _r, _k, evidence = _cap_run("NVDA", 10.0, FULL_STACK, strategy=strict)
+    # 13 -> cap 4: resonance 7 fully cut, residual 2 comes off sector RS.
+    assert contributions["sector_resonance"] == 0
+    assert contributions["relative_strength_sector"] == 4
+    cap_items = [i for i in evidence if i.code == "SECTOR_CONTEXT_CAP_APPLIED"]
+    assert {i.component for i in cap_items} == {"sector_resonance", "relative_strength_sector"}
+
+
+def test_cap_does_not_touch_broad_rs_or_unrelated_symbols():
+    contributions, _r, _k, _e = _cap_run("NVDA", 10.0, FULL_STACK)
+    assert contributions["relative_strength_broad"] == 6    # broad RS untouched
+
+    zzz, _r2, _k2, evidence2 = _cap_run("ZZZZ", 10.0, FULL_STACK)
+    assert zzz["sector_resonance"] == 0                     # no benchmark, no tailwind
+    assert not any(i.code == "SECTOR_CONTEXT_CAP_APPLIED" for i in evidence2)
+
+
+def test_capped_run_keeps_points_contribution_invariant():
+    contributions, _r, _k, evidence = _cap_run("NVDA", 10.0, FULL_STACK)
+    sums = defaultdict(float)
+    for item in evidence:
+        if item.points is not None:
+            sums[item.component] += item.points
+    for component, value in contributions.items():
+        assert abs(sums[component] - value) < 1e-9

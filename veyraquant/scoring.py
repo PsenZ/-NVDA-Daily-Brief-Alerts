@@ -193,6 +193,38 @@ def score_components(
             ev.reason("SECTOR_QQQ_TAILWIND", "QQQ remains constructive, which helps growth exposure.", "sector_resonance", 3, source="market", value=round(qqq_sector_perf, 2))
     contributions["sector_resonance"] = sector
 
+    # Correlated sector-context cap (R3.5.1): sector-relative RS, the
+    # sector-benchmark tailwind and the QQQ growth tailwind are distinct
+    # signals but highly correlated - uncapped they stack to +13 for
+    # growth/semi names. Cap the combined POSITIVE contribution, cutting
+    # the environmental tailwinds (sector_resonance) first so the
+    # stock-alpha signal (sector RS) keeps its discriminating power.
+    # Negative sector RS is never offset by the cap.
+    cap = max(0.0, float(getattr(s, "score_sector_context_cap", 10.0)))
+    positive_total = max(sector_rs, 0.0) + max(sector, 0.0)
+    if positive_total > cap:
+        excess = positive_total - cap
+        resonance_cut = min(excess, max(sector, 0.0))
+        if resonance_cut > 0:
+            sector -= resonance_cut
+            contributions["sector_resonance"] = sector
+            ev.info(
+                "SECTOR_CONTEXT_CAP_APPLIED",
+                "Correlated sector context capped; environmental tailwinds trimmed first.",
+                "sector_resonance", -resonance_cut, source="market",
+                value=round(positive_total, 2), threshold=cap,
+            )
+        rs_cut = excess - resonance_cut
+        if rs_cut > 0:
+            sector_rs -= rs_cut
+            contributions["relative_strength_sector"] = sector_rs
+            ev.info(
+                "SECTOR_CONTEXT_CAP_APPLIED",
+                "Correlated sector context capped; residual trim on sector RS.",
+                "relative_strength_sector", -rs_cut, source="market",
+                value=round(positive_total, 2), threshold=cap,
+            )
+
     event_risk = 0.0
     recommendation = fundamentals.recommendation_key
     if recommendation in {"buy", "strong_buy"}:
