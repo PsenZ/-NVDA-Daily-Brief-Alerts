@@ -241,3 +241,108 @@ def test_engine_propagates_attribution_tags_to_trades():
     assert (trade.setup_type, trade.market_regime, trade.sector, trade.data_quality) == (
         "pullback_add", "neutral", "mega_growth", "MEDIUM",
     )
+
+
+# --- R5.5: validation fidelity ---
+
+def test_open_positions_liquidate_at_end_of_test():
+    rows = [
+        (100, 101, 99, 100),
+        (100, 101, 99, 100),   # entry at 100
+        (104, 105, 103, 104),
+        (106, 107, 105, 106),  # last bar: liquidation at close 106
+    ]
+    result = run_event_backtest(
+        {"AAA": frame(rows)}, [sig(target=999.0)], make_config(), holding_bars=99
+    )
+    assert len(result.trades) == 1               # the position did not vanish
+    trade = result.trades[0]
+    assert trade.exit_reason == "end_of_test"
+    assert trade.exit_price == 106.0
+    assert trade.r_net == 1.2                    # (106-100)/5
+    assert result.final_equity - result.starting_equity == sum(t.pnl for t in result.trades)
+    assert result.equity_curve[-1][1] == result.final_equity
+
+
+def test_duplicate_buy_on_open_position_is_skipped():
+    rows = [(100, 101, 99, 100)] * 6
+    signals = [
+        TradeSignal("AAA", 0, 95.0, 999.0, 1.0, 90, action="BUY_TRIGGER"),
+        TradeSignal("AAA", 2, 95.0, 999.0, 1.0, 80, action="BUY_TRIGGER"),  # while open
+    ]
+    result = run_event_backtest({"AAA": frame(rows)}, signals, make_config(), holding_bars=99)
+    assert len(result.trades) == 1
+    assert result.skipped_duplicate == 1
+
+
+def test_add_requires_an_open_position():
+    rows = [(100, 101, 99, 100)] * 6
+    # ADD with no position: must not fake-execute as a fresh buy.
+    lonely_add = [TradeSignal("AAA", 0, 95.0, 999.0, 1.0, 90, action="ADD_TRIGGER")]
+    result = run_event_backtest({"AAA": frame(rows)}, lonely_add, make_config())
+    assert result.trades == [] or all(t.exit_reason == "" for t in result.trades)
+    assert len([t for t in result.trades]) == 0
+    assert result.invalid_adds == 1
+
+    # ADD with a position: a deliberate second tranche is allowed.
+    buy_then_add = [
+        TradeSignal("AAA", 0, 95.0, 999.0, 1.0, 90, action="BUY_TRIGGER"),
+        TradeSignal("AAA", 2, 95.0, 999.0, 1.0, 80, action="ADD_TRIGGER"),
+    ]
+    result = run_event_backtest(
+        {"AAA": frame(rows)}, buy_then_add, make_config(), holding_bars=99
+    )
+    assert len(result.trades) == 2
+    assert result.invalid_adds == 0 and result.skipped_duplicate == 0
+
+
+def test_portfolio_pipeline_uses_real_decision_manager_end_to_end(monkeypatch):
+    """Multi-symbol e2e: sector budget defers, heat haircut sizes, engine
+    trades only what the live approval chain would have approved."""
+    from test_decision_manager import make_result as dm_result
+    from veyraquant.evaluation import portfolio_signals_from_pipeline, run_portfolio_backtest
+
+    scores = {"NVDA": 90, "AMD": 82, "MU": 79}
+
+    def fake_analyze(symbol, daily, intraday, fundamentals, options, news, market, config, **kw):
+        result = dm_result(symbol, "BUY_TRIGGER", scores[symbol], "high", max_loss_pct=0.5)
+        result.trade_plan.entry_low = 100.0
+        result.trade_plan.entry_high = 101.0
+        result.trade_plan.stop_price = 96.0
+        result.trade_plan.target1 = 999.0
+        result.trade_plan.target2 = 999.0
+        return result
+
+    monkeypatch.setattr("veyraquant.signals.analyze_symbol", fake_analyze)
+
+    frames = {name: frame([(100, 101, 99, 100)] * 102) for name in ("NVDA", "AMD", "MU")}
+    config = SimpleNamespace(
+        # decision_manager side (semis share a 1.2% risk budget; heat 0.8)
+        sector_map={}, sector_risk_limits={"semiconductor": 1.2, "general": 1.0},
+        sector_position_limits={"semiconductor": 50.0, "general": 50.0},
+        max_approved_actions_risk_on=3, max_approved_actions_neutral=2,
+        max_approved_actions_risk_off=0, portfolio_heat_max_pct=0.8,
+        # engine side
+        backtest_cost_bps=0.0, max_position_pct=100.0, account_equity=100_000.0,
+        risk_per_trade_pct=0.5,
+    )
+    market_histories = {"SPY": frame([(500, 505, 495, 502)] * 102)}
+
+    signals = portfolio_signals_from_pipeline(
+        frames, config, market_histories, first_signal_bar=100
+    )
+
+    by_symbol = {s.symbol: s for s in signals}
+    # Live-identical approvals: NVDA full, AMD heat-haircut, MU nothing.
+    assert set(by_symbol) == {"NVDA", "AMD"}          # deferred MU emits NO signal
+    assert by_symbol["NVDA"].risk_pct == 0.5
+    assert abs(by_symbol["AMD"].risk_pct - 0.3) < 1e-9  # post-haircut sizing
+    assert all(s.portfolio_decision == "approved" for s in signals)
+    assert all(s.action == "BUY_TRIGGER" for s in signals)
+
+    result = run_portfolio_backtest(frames, config, market_histories, first_signal_bar=100)
+    traded = {t.symbol for t in result.trades}
+    assert traded == {"NVDA", "AMD"}                  # budgets held in the backtest
+    assert all(t.exit_reason == "end_of_test" for t in result.trades)
+    risk_by_symbol = {t.symbol: t.risk_pct for t in result.trades}
+    assert abs(risk_by_symbol["AMD"] - 0.3) < 1e-9

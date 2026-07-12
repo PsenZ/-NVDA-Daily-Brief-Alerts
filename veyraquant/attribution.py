@@ -81,23 +81,32 @@ def group_metrics(
 def attach_benchmark_alpha(
     trades: list[SimTrade], benchmark: Optional[pd.DataFrame]
 ) -> list[SimTrade]:
-    """Fill benchmark_return/alpha per closed trade over its own holding
-    window. Trades whose entry/exit dates are missing from the benchmark
-    calendar keep None - never approximate with a different window."""
+    """Fill benchmark_return/alpha per closed trade over an
+    EXECUTION-CONSISTENT window (R5.5).
+
+    The engine enters at the entry day's OPEN, so the benchmark leg
+    starts at the benchmark's open of the same day (falling back to
+    close for legacy close-only frames). The benchmark exit matches the
+    trade's exit style: gap exits fill at the open, so the benchmark is
+    measured at its open too; intrabar/close exits use the close.
+    Trades whose dates are missing from the benchmark calendar keep
+    None - never approximate with a different window."""
     if benchmark is None or benchmark.empty:
         return trades
     closes = benchmark["Close"]
+    opens = benchmark["Open"] if "Open" in benchmark.columns else closes
     for trade in trades:
         if trade.exit_date is None:
             continue
+        exit_series = opens if trade.exit_reason in ("gap_stop", "gap_target") else closes
         try:
-            entry_close = float(closes.loc[trade.entry_date])
-            exit_close = float(closes.loc[trade.exit_date])
+            bench_entry = float(opens.loc[trade.entry_date])
+            bench_exit = float(exit_series.loc[trade.exit_date])
         except KeyError:
             continue
-        if entry_close <= 0 or trade.entry_price <= 0:
+        if bench_entry <= 0 or trade.entry_price <= 0:
             continue
-        trade.benchmark_return = round(exit_close / entry_close - 1, 6)
+        trade.benchmark_return = round(bench_exit / bench_entry - 1, 6)
         symbol_return = trade.exit_price / trade.entry_price - 1
         trade.alpha = round(symbol_return - trade.benchmark_return, 6)
     return trades
