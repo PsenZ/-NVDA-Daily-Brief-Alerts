@@ -120,18 +120,25 @@ def analyze_symbol(
     else:  # test doubles may still return the legacy 3-tuple
         contributions, reasons, risks = scored
         evidence = []
-    # observed_at is the DATA time: scoring evidence derives from the last
-    # completed daily bar. News timestamps are not reliably available, so
-    # news items stay None rather than borrowing the bar time.
+    # observed_at is the DATA time and is source-specific (R3.5.1). Only
+    # bar-derived evidence may carry the bar time; options/fundamentals use
+    # their own fetch time, and anything without a real timestamp stays
+    # None - never dressed up with an unrelated bar time.
     last_bar_iso = None
     try:
         last_bar_iso = daily.index[-1].isoformat()
     except Exception:
         pass
-    if last_bar_iso:
-        for item in evidence:
-            if getattr(item, "observed_at", None) is None and item.source != "news":
-                item.observed_at = last_bar_iso
+    observed_by_source = {
+        "technical": last_bar_iso,
+        "market": None,  # market snapshots carry no per-bar timestamp
+        "options": getattr(options, "fetched_at", None),
+        "fundamental": getattr(fundamentals, "fetched_at", None),
+        "news": None,
+    }
+    for item in evidence:
+        if getattr(item, "observed_at", None) is None:
+            item.observed_at = observed_by_source.get(item.source)
     gate_context: dict[str, dict] = {}
     raw_score = sum(contributions.values())
     score = int(max(0, min(100, round(raw_score))))
@@ -157,6 +164,8 @@ def analyze_symbol(
         gate_context["earnings_blackout"] = {
             "value": days_to_earnings,
             "threshold": blackout_days,
+            # Earnings knowledge comes from the fundamentals fetch, not a bar.
+            "observed_at": getattr(fundamentals, "fetched_at", None),
         }
         action = "WATCH"
     if action in ACTIONABLE_ACTIONS and (profile.is_leveraged or profile.is_inverse):

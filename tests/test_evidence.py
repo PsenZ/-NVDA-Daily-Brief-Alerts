@@ -221,3 +221,106 @@ def test_observed_at_uses_bar_time_not_export_time(monkeypatch):
     news_items = [i for i in result.evidence if i.source == "news"]
     assert technical and all(i.observed_at == bar_iso for i in technical)
     assert news_items and all(i.observed_at is None for i in news_items)
+
+
+# --- R3.5.1: source-specific observed_at ---
+
+def _analyze_with(fundamentals=None, options=None, news=None, daily=None, monkeypatch=None, symbol="NVDA", profile=None):
+    from veyraquant.signals import analyze_symbol
+    from test_signal_consistency import bullish_market, dummy_daily, make_config, news_bundle
+
+    return analyze_symbol(
+        symbol, dummy_daily() if daily is None else daily, None,
+        fundamentals or FundamentalsData(), options,
+        news or news_bundle(0.0), bullish_market(), make_config(), profile=profile,
+    )
+
+
+def test_options_evidence_uses_fetch_time_never_bar_time():
+    opts = OptionsData("2026-08-21", 0.8, 1.5, 0.7, fetched_at="2026-07-12T01:02:03+00:00")
+    result = _analyze_with(options=opts)
+    option_items = [i for i in result.evidence if i.source == "options"]
+    assert option_items
+    assert all(i.observed_at == "2026-07-12T01:02:03+00:00" for i in option_items)
+
+    stale = OptionsData("2026-08-21", 0.8, 1.5, 0.7)  # no fetched_at
+    result = _analyze_with(options=stale)
+    option_items = [i for i in result.evidence if i.source == "options"]
+    assert option_items and all(i.observed_at is None for i in option_items)
+
+
+def test_fundamental_evidence_uses_fetch_time_or_none():
+    funda = FundamentalsData(recommendation_key="sell", fetched_at="2026-07-12T02:00:00+00:00")
+    result = _analyze_with(fundamentals=funda)
+    items = [i for i in result.evidence if i.source == "fundamental" and i.component != "gate"]
+    assert items and all(i.observed_at == "2026-07-12T02:00:00+00:00" for i in items)
+
+    legacy = FundamentalsData(recommendation_key="sell")  # legacy cache: no fetched_at
+    result = _analyze_with(fundamentals=legacy)
+    items = [i for i in result.evidence if i.source == "fundamental" and i.component != "gate"]
+    assert items and all(i.observed_at is None for i in items)
+
+
+def test_earnings_gate_observed_at_follows_fundamentals_fetch_time(monkeypatch):
+    from test_signal_consistency import breakout_snapshot, score_result
+
+    monkeypatch.setattr("veyraquant.signals.tech_summary", lambda _d: breakout_snapshot())
+    monkeypatch.setattr("veyraquant.signals.intraday_snapshot", lambda _i: None)
+    monkeypatch.setattr("veyraquant.signals.score_components", lambda *a, **k: score_result(72))
+
+    with_time = _analyze_with(
+        fundamentals=FundamentalsData(days_to_earnings=1, fetched_at="2026-07-12T02:00:00+00:00")
+    )
+    gate = next(i for i in with_time.evidence if i.code == "EARNINGS_BLACKOUT")
+    assert gate.observed_at == "2026-07-12T02:00:00+00:00"
+
+    without_time = _analyze_with(fundamentals=FundamentalsData(days_to_earnings=1))
+    gate = next(i for i in without_time.evidence if i.code == "EARNINGS_BLACKOUT")
+    assert gate.observed_at is None
+
+
+def test_liquidity_gate_keeps_daily_bar_time(monkeypatch):
+    from dataclasses import replace
+    from veyraquant.instruments import default_profile
+    from test_signal_consistency import breakout_snapshot, dummy_daily, score_result
+
+    monkeypatch.setattr("veyraquant.signals.tech_summary", lambda _d: breakout_snapshot())
+    monkeypatch.setattr("veyraquant.signals.intraday_snapshot", lambda _i: None)
+    monkeypatch.setattr("veyraquant.signals.score_components", lambda *a, **k: score_result(72))
+
+    thin = dummy_daily()
+    thin["Volume"] = 100.0
+    result = _analyze_with(daily=thin, profile=replace(default_profile("ZZZZ")))
+    gate = next(i for i in result.evidence if i.code == "INSUFFICIENT_LIQUIDITY")
+    assert gate.observed_at == thin.index[-1].isoformat()  # daily-derived gate
+
+
+def test_market_evidence_has_no_borrowed_timestamp():
+    result = _analyze_with()
+    market_items = [i for i in result.evidence if i.source == "market" and i.component != "gate"]
+    assert market_items
+    assert all(i.observed_at is None for i in market_items)
+
+
+def test_fundamentals_cache_roundtrips_fetched_at(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from veyraquant.data import DataClient
+    from test_data import make_config as data_config
+
+    client = DataClient(data_config(tmp_path))
+
+    class LiveTicker:
+        info = {"marketCap": 1};  calendar = None
+
+    live = client.fetch_fundamentals("NVDA", LiveTicker(), [])
+    assert live.fetched_at is not None
+
+    # Cache read (ticker None) must report the ORIGINAL fetch time.
+    cached = client.fetch_fundamentals("NVDA", None, [])
+    assert cached.fetched_at == live.fetched_at
+
+    # Legacy cache without _fetched_at -> None, no crash.
+    legacy_path = client.cache_dir / "OLD_fundamentals.json"
+    legacy_path.write_text('{"marketCap": 5}', encoding="utf-8")
+    legacy = client.fetch_fundamentals("OLD", None, [])
+    assert legacy.fetched_at is None and legacy.market_cap == 5

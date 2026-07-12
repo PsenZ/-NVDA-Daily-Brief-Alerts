@@ -20,6 +20,9 @@ class FundamentalsData:
     recommendation_key: Any = None
     current_price: Any = None
     days_to_earnings: Optional[int] = None
+    # UTC ISO-8601 time the fundamentals payload was actually fetched;
+    # None for legacy caches that never recorded it.
+    fetched_at: Optional[str] = None
 
 
 @dataclass
@@ -28,6 +31,8 @@ class OptionsData:
     put_call_oi: Optional[float]
     put_call_vol: Optional[float]
     iv_mid: Optional[float]
+    # UTC ISO-8601 time the option chain was fetched; None when unknown.
+    fetched_at: Optional[str] = None
 
 
 @dataclass

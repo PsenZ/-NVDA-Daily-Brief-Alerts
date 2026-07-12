@@ -4,7 +4,7 @@ import math
 import os
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from datetime import time as dt_time
 from pathlib import Path
 from typing import Any, Optional
@@ -96,6 +96,10 @@ def headline_sentiment_score(text: str) -> int:
 
 def safe_cache_key(symbol: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", symbol)
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 US_MARKET_CLOSE = dt_time(16, 0)
@@ -240,20 +244,26 @@ class DataClient:
     ) -> FundamentalsData:
         cache_path = self.cache_dir / f"{safe_cache_key(symbol)}_fundamentals.json"
         info: dict[str, Any] = {}
+        fetched_at: str | None = None
         if ticker is not None:
             try:
                 info = ticker.info or {}
-                self._write_json(cache_path, info)
+                fetched_at = _utc_now_iso()
+                # The fetch time rides inside the cache payload so cache
+                # reads report the ORIGINAL data time, never file mtime.
+                self._write_json(cache_path, {**info, "_fetched_at": fetched_at})
                 if quality is not None:
                     quality.fundamentals_freshness = "live"
             except Exception as exc:
                 logger.warning("%s fundamentals fetch failed; trying cache.", symbol, exc_info=True)
                 warnings.append(f"{symbol} 基本面实时数据不可用，尝试使用缓存: {exc}")
                 info = self._read_json(cache_path) or {}
+                fetched_at = info.get("_fetched_at")  # None for legacy caches
                 if quality is not None:
                     quality.fundamentals_freshness = "cache" if info else "missing"
         else:
             info = self._read_json(cache_path) or {}
+            fetched_at = info.get("_fetched_at")
             if quality is not None:
                 quality.fundamentals_freshness = "cache" if info else "missing"
 
@@ -272,6 +282,7 @@ class DataClient:
             recommendation_key=info.get("recommendationKey"),
             current_price=info.get("currentPrice"),
             days_to_earnings=self._fetch_days_to_earnings(symbol, ticker, warnings),
+            fetched_at=fetched_at,
         )
 
     def _fetch_days_to_earnings(
@@ -321,6 +332,7 @@ class DataClient:
             put_call_oi=total_put_oi / total_call_oi if total_call_oi > 0 else None,
             put_call_vol=total_put_vol / total_call_vol if total_call_vol > 0 else None,
             iv_mid=iv_mid,
+            fetched_at=_utc_now_iso(),
         )
 
     def fetch_news(self, symbol: str, warnings: list[str]) -> NewsBundle:
