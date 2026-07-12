@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from .config import AppConfig
+from .instruments import InstrumentProfile, load_registry, resolve_profile
 from .models import DataQuality, FundamentalsData, NewsBundle, OptionsData, SymbolData
 from .timeutils import US_EASTERN_TZ
 
@@ -189,19 +190,28 @@ class DataClient:
         self.config = config
         self.cache_dir = Path(config.cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.instrument_registry = load_registry(getattr(config, "instruments_path", ""))
 
     def fetch_symbol(self, symbol: str) -> SymbolData:
         warnings: list[str] = []
         quality = DataQuality()
+        profile = resolve_profile(symbol, self.instrument_registry)
         ticker = self._ticker(symbol, warnings)
         daily, intraday = self.fetch_price_history(symbol, ticker, warnings, quality)
-        fundamentals = self.fetch_fundamentals(symbol, ticker, warnings, quality)
-        options = self.fetch_options(symbol, ticker, warnings)
+        if profile.has_fundamentals:
+            fundamentals = self.fetch_fundamentals(symbol, ticker, warnings, quality)
+        else:
+            fundamentals = FundamentalsData()
+            quality.fundamentals_freshness = "not_applicable"
+        options = self.fetch_options(symbol, ticker, warnings) if profile.has_options else None
         news = self.fetch_news(symbol, warnings)
         quality.options_available = options is not None
         quality.news_available = bool(news.news or news.social)
-        self._finalize_data_quality(symbol, quality, warnings)
-        return SymbolData(symbol, daily, intraday, fundamentals, options, news, warnings, quality)
+        self._finalize_data_quality(symbol, quality, warnings, profile)
+        return SymbolData(
+            symbol, daily, intraday, fundamentals, options, news, warnings, quality,
+            profile=profile,
+        )
 
     def fetch_market_daily(self, symbol: str) -> Optional[pd.DataFrame]:
         warnings: list[str] = []
@@ -435,7 +445,11 @@ class DataClient:
             return None
 
     def _finalize_data_quality(
-        self, symbol: str, quality: DataQuality, warnings: list[str]
+        self,
+        symbol: str,
+        quality: DataQuality,
+        warnings: list[str],
+        profile: InstrumentProfile | None = None,
     ) -> None:
         level = "HIGH"
         reasons: list[str] = []
@@ -469,11 +483,13 @@ class DataClient:
             reasons.append("intraday data is missing; entry alerts are disabled")
             if level == "HIGH":
                 level = "MEDIUM"
-        if quality.fundamentals_freshness in {"missing", "unknown"}:
+        expect_fundamentals = profile is None or profile.has_fundamentals
+        expect_options = profile is None or profile.has_options
+        if expect_fundamentals and quality.fundamentals_freshness in {"missing", "unknown"}:
             reasons.append("fundamentals data is missing or cached")
             if level == "HIGH":
                 level = "MEDIUM"
-        if not quality.options_available:
+        if expect_options and not quality.options_available:
             reasons.append("options data is unavailable")
             if level == "HIGH":
                 level = "MEDIUM"

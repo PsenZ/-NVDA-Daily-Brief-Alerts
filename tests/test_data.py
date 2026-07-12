@@ -170,3 +170,25 @@ def test_days_to_next_earnings_parses_dict_calendar():
     assert days_to_next_earnings({}, today) is None
     assert days_to_next_earnings(None, today) is None
     assert days_to_next_earnings({"Earnings Date": ["garbage"]}, today) is None
+
+
+def test_crypto_profile_skips_options_and_fundamentals_expectations(tmp_path, monkeypatch):
+    from veyraquant.data import DataClient
+
+    config = make_config(tmp_path)
+    client = DataClient(config)
+    monkeypatch.setattr(DataClient, "_ticker", lambda self, symbol, warnings: None)
+
+    crypto = client.fetch_symbol("BTC-USD")
+    assert crypto.profile.asset_type == "crypto"
+    assert crypto.options is None
+    assert crypto.fundamentals.market_cap is None
+    assert crypto.data_quality.fundamentals_freshness == "not_applicable"
+    # No downgrade reasons for capabilities the instrument does not have.
+    joined = "; ".join(crypto.data_quality.reasons)
+    assert "options data is unavailable" not in joined
+    assert "fundamentals data is missing" not in joined
+
+    stock = client.fetch_symbol("ZZZZ")
+    joined_stock = "; ".join(stock.data_quality.reasons)
+    assert "options data is unavailable" in joined_stock  # stocks still expect options

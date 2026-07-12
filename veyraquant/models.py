@@ -61,6 +61,8 @@ class SymbolData:
     news: NewsBundle
     warnings: list[str] = field(default_factory=list)
     data_quality: DataQuality = field(default_factory=DataQuality)
+    # InstrumentProfile; typed as Any so models stays a dependency leaf.
+    profile: Any = None
 
 
 @dataclass
