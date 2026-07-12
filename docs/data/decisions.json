@@ -1,0 +1,26 @@
+{
+ "entries": [
+  {
+   "date": "2026-07-06",
+   "symbol": "NVDA",
+   "setup_type": "breakout_entry",
+   "action": "BUY_TRIGGER",
+   "score": 82,
+   "outcome_status": "resolved",
+   "five_day_return": 0.032,
+   "alpha_vs_spy": 0.018,
+   "horizon_returns": {
+    "1": 0.006,
+    "3": 0.02,
+    "5": 0.032,
+    "10": 0.028
+   },
+   "horizon_alphas": {
+    "1": 0.003,
+    "3": 0.011,
+    "5": 0.018,
+    "10": 0.009
+   }
+  }
+ ]
+}

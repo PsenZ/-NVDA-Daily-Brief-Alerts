@@ -50,10 +50,10 @@ jobs:
       - name: Commit armed plan state if updated
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: |
-          if [ -n "$(git status --porcelain state/armed_plans.json)" ]; then
+          if [ -n "$(git status --porcelain state/armed_plans.json docs/data/armed_plans.json)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add state/armed_plans.json
+            git add --ignore-errors state/armed_plans.json docs/data/armed_plans.json || true
             git commit -m "Update armed plan state"
             git pull --rebase origin "${GITHUB_REF_NAME}"
             git push

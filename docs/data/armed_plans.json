@@ -1,0 +1,22 @@
+{
+ "plans": [
+  {
+   "created_date": "2026-07-12",
+   "entry_high": 101.0,
+   "entry_low": 100.0,
+   "expires_date": "2026-07-14",
+   "max_loss_pct": 0.5,
+   "note": "Approved.",
+   "plan_kind": "buy",
+   "position_pct": 6.4,
+   "score": 82,
+   "setup_type": "breakout_entry",
+   "status": "armed",
+   "stop_price": 96.0,
+   "symbol": "NVDA",
+   "target1": 107.5,
+   "target2": 112.0,
+   "triggered_at": null
+  }
+ ]
+}
