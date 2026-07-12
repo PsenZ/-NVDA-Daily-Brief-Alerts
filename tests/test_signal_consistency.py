@@ -591,3 +591,43 @@ def test_earnings_outside_blackout_window_does_not_block(monkeypatch):
     assert result.action == "BUY_TRIGGER"
     assert "earnings_blackout" not in result.suppressed_by
     assert_result_consistency(result)
+
+
+def test_material_hash_bands_ignore_drift_but_catch_regime_and_band_jumps():
+    from veyraquant.models import TradePlan
+    from veyraquant.signals import _result
+
+    def make(score=72, regime="risk-on", entry=(100.2, 101.2), stop=96.0, rr=1.8,
+             action="BUY_TRIGGER", setup="breakout_entry", last=100.0):
+        plan = TradePlan(
+            entry_zone=f"${entry[0]:.2f} - ${entry[1]:.2f}", stop=f"${stop:.2f}",
+            targets="$107.00 / $112.00", position_pct=6.0, max_loss_pct=0.5,
+            rr=rr, trigger="t", cancel="c", entry_low=entry[0], entry_high=entry[1],
+            stop_price=stop, target1=107.0, target2=112.0,
+        )
+        return _result(
+            rank=0, symbol="NVDA", setup_type=setup, signal_type="x", action=action,
+            is_actionable=True, suppressed_by=[], plan_kind="buy", score=score,
+            market_regime=regime, plan=plan, reasons=[], risks=[], contributions={},
+            alert_kind="breakout_entry", last_price=last,
+        )
+
+    base = make()
+    drift = make(entry=(100.25, 101.25), score=75)        # in-band price/score drift
+    assert drift.material_state_hash == base.material_state_hash
+    assert drift.identity_hash == base.identity_hash
+
+    score_jump = make(score=80)                            # 70-79 -> 80-89
+    assert score_jump.material_state_hash != base.material_state_hash
+    assert score_jump.identity_hash == base.identity_hash
+
+    regime_flip = make(regime="risk-off")
+    assert regime_flip.material_state_hash != base.material_state_hash
+
+    stop_shift = make(stop=93.0)                           # stop distance re-banded
+    assert stop_shift.material_state_hash != base.material_state_hash
+
+    action_change = make(action="ADD_TRIGGER", setup="pullback_add")
+    assert action_change.identity_hash != base.identity_hash
+    # Back-compat: signal_hash aliases the material hash.
+    assert base.signal_hash == base.material_state_hash

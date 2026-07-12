@@ -255,6 +255,7 @@ def maybe_send_entry_alerts(state, now_dt, results, config: AppConfig) -> bool:
             now_dt,
             config.alert_cooldown_hours,
             getattr(result, "signal_hash", None),
+            identity_hash=getattr(result, "identity_hash", None),
         )
         if not should_send:
             logger.info("Alert skipped due to cooldown: %s %s", result.symbol, result.alert_kind)
@@ -280,6 +281,7 @@ def maybe_send_entry_alerts(state, now_dt, results, config: AppConfig) -> bool:
             {
                 "score": result.score,
                 "signal_hash": result.signal_hash,
+                "identity_hash": getattr(result, "identity_hash", None),
                 "plan": {
                     "entry_zone": result.entry_zone,
                     "stop": result.stop,

@@ -62,7 +62,7 @@ def test_should_send_alert_allows_changed_signal_hash_within_cooldown():
     )
 
     assert should_send
-    assert reason == "signal_changed"
+    assert reason == "signal_materially_changed"
 
 
 def test_should_send_alert_handles_legacy_state_without_signal_hash():
@@ -81,3 +81,42 @@ def test_should_send_alert_handles_legacy_state_without_signal_hash():
 
     assert not should_send
     assert reason == "cooldown_active"
+
+
+# --- R3.5: two-level fingerprint semantics ---
+
+def test_identity_change_bypasses_cooldown_with_its_own_reason():
+    state = {"alerts": {"NVDA": {"breakout_entry": {
+        "sent_at": "2026-05-01T10:00:00+10:00",
+        "signal_hash": "mat-1", "identity_hash": "id-1",
+    }}}}
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    now = datetime(2026, 5, 1, 12, 0, tzinfo=ZoneInfo("Australia/Sydney"))
+
+    from veyraquant.state import should_send_alert
+    send, reason = should_send_alert(
+        state, "NVDA", "breakout_entry", now, 12, "mat-1", identity_hash="id-2"
+    )
+    assert send and reason == "signal_identity_changed"
+
+
+def test_same_material_state_holds_cooldown_and_legacy_state_still_works():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from veyraquant.state import should_send_alert
+
+    now = datetime(2026, 5, 1, 12, 0, tzinfo=ZoneInfo("Australia/Sydney"))
+    # Legacy record: no identity_hash stored -> identity check is skipped.
+    legacy = {"alerts": {"NVDA": {"breakout_entry": {
+        "sent_at": "2026-05-01T10:00:00+10:00", "signal_hash": "mat-1",
+    }}}}
+    send, reason = should_send_alert(
+        legacy, "NVDA", "breakout_entry", now, 12, "mat-1", identity_hash="id-1"
+    )
+    assert not send and reason == "cooldown_active"
+
+    send, reason = should_send_alert(
+        legacy, "NVDA", "breakout_entry", now, 12, "mat-2", identity_hash="id-1"
+    )
+    assert send and reason == "signal_materially_changed"

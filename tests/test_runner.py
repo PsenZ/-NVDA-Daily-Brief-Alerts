@@ -172,7 +172,7 @@ def test_changed_signal_hash_resends_within_cooldown(monkeypatch):
     assert sent_any
     assert len(sent) == 1
     assert state["alerts"]["NVDA"]["breakout_entry"]["signal_hash"] == "new-hash"
-    assert state["alerts"]["NVDA"]["breakout_entry"]["reason"] == "signal_changed"
+    assert state["alerts"]["NVDA"]["breakout_entry"]["reason"] == "signal_materially_changed"
 
 
 def test_entry_alert_can_send_outside_regular_market_hours_on_us_weekday(monkeypatch):

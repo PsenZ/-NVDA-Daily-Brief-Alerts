@@ -310,12 +310,27 @@ def _result(
     data_quality: Optional[DataQuality] = None,
     evidence: Optional[list] = None,
 ) -> SignalResult:
-    # Identity only: symbol + action + setup. Score and price-derived plan
-    # fields drift on every data refresh, and a changed hash bypasses the
-    # alert cooldown ("signal_changed"), so including them made the cooldown
-    # ineffective exactly when the market was trending.
-    hash_input = f"{symbol}|{action}|{setup_type}"
-    signal_hash = hashlib.sha1(hash_input.encode("utf-8")).hexdigest()[:12]
+    # Two-level fingerprint (R3.5): identity says WHAT the signal is;
+    # material state says whether it changed in a way a human would care
+    # about. Material fields are BANDED - exact prices, scores and text
+    # never enter the hash, so intraday drift cannot bypass the cooldown,
+    # while a score-band jump, regime flip or re-banded stop distance can.
+    identity_input = f"{symbol}|{action}|{setup_type}"
+    identity_hash = hashlib.sha1(identity_input.encode("utf-8")).hexdigest()[:12]
+    material_input = "|".join(
+        [
+            identity_input,
+            _score_band(score),
+            market_regime,
+            _entry_distance_band(plan, last_price),
+            _stop_distance_band(plan),
+            _rr_band(plan.rr),
+        ]
+    )
+    material_state_hash = hashlib.sha1(material_input.encode("utf-8")).hexdigest()[:12]
+    # Back-compat: signal_hash aliases the material hash; old state records
+    # keyed on signal_hash keep working.
+    signal_hash = material_state_hash
     return SignalResult(
         rank=rank,
         symbol=symbol,
@@ -333,6 +348,8 @@ def _result(
         trade_plan=plan,
         alert_kind=alert_kind,
         signal_hash=signal_hash,
+        identity_hash=identity_hash,
+        material_state_hash=material_state_hash,
         last_price=last_price,
         raw_score=raw_score,
         warnings=warnings or [],
@@ -346,6 +363,54 @@ def _result(
         data_quality=data_quality or DataQuality(),
         evidence=evidence or [],
     )
+
+
+def _score_band(score: int) -> str:
+    if score >= 90:
+        return "90-100"
+    if score >= 80:
+        return "80-89"
+    if score >= 70:
+        return "70-79"
+    if score >= 60:
+        return "60-69"
+    if score >= 50:
+        return "50-59"
+    return "0-49"
+
+
+def _entry_distance_band(plan: TradePlan, last_price) -> str:
+    if plan.entry_low is None or plan.entry_high is None or not last_price:
+        return "na"
+    mid = (float(plan.entry_low) + float(plan.entry_high)) / 2
+    pct = (mid - float(last_price)) / float(last_price) * 100
+    return f"{round(pct)}pct"  # 1% buckets
+
+
+def _stop_distance_band(plan: TradePlan) -> str:
+    if plan.stop_price is None or plan.entry_low is None or plan.entry_high is None:
+        return "na"
+    mid = (float(plan.entry_low) + float(plan.entry_high)) / 2
+    if mid <= 0:
+        return "na"
+    pct = (mid - float(plan.stop_price)) / mid * 100
+    return f"{round(pct * 2) / 2}pct"  # 0.5% buckets
+
+
+def _rr_band(rr) -> str:
+    try:
+        value = float(rr)
+    except Exception:
+        return "na"
+    if value <= 0:
+        return "na"
+    if value < 1.5:
+        return "lt1.5"
+    if value < 2.0:
+        return "1.5-1.99"
+    if value < 3.0:
+        return "2.0-2.99"
+    return "3plus"
 
 
 def _derive_market_evidence(result: SignalResult, market: MarketContext) -> list[str]:
