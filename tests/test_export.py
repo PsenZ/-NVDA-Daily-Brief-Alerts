@@ -47,7 +47,7 @@ def test_brief_payload_is_json_serializable_with_expected_shape():
     )
 
     json.dumps(payload)  # must not raise
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2
     assert payload["date"] == "2026-07-12"
     assert payload["meta"]["symbols"] == ["NVDA", "MSFT"]
     assert payload["meta"]["market_symbols"] == ["SPY", "QQQ", "SMH", "^VIX"]
@@ -105,3 +105,21 @@ def test_export_armed_plans_writes_mirror(tmp_path):
 
     mirrored = json.loads((tmp_path / "data" / "armed_plans.json").read_text("utf-8"))
     assert mirrored["plans"] == plans
+
+
+def test_export_serializes_evidence_with_run_timestamp():
+    from veyraquant.evidence import EvidenceItem
+
+    now = datetime(2026, 7, 12, 7, 35, tzinfo=SYDNEY_TZ)
+    results = sample_results()
+    results[0].evidence = [
+        EvidenceItem("TREND_MA_STACK", "MAs stacked.", "reason", "trend", 10.0),
+        EvidenceItem("EARNINGS_BLACKOUT", "Earnings近", "risk", "gate", None, "fundamental"),
+    ]
+    payload = build_brief_payload(results, sample_market(), make_config(), now)
+
+    evidence = payload["results"][0]["evidence"]
+    assert [e["code"] for e in evidence] == ["TREND_MA_STACK", "EARNINGS_BLACKOUT"]
+    assert all(e["timestamp"] == now.isoformat() for e in evidence)
+    assert evidence[0]["points"] == 10.0 and evidence[1]["component"] == "gate"
+    json.dumps(payload)  # still serializable

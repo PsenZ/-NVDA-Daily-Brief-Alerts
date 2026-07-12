@@ -12,6 +12,7 @@ from .constants import (
     ACTIONABLE_ACTIONS,
     MARKET_EVIDENCE_MARKERS,
 )
+from .evidence import gate_evidence
 from .features import intraday_snapshot, tech_summary
 from .instruments import InstrumentProfile, default_profile
 from .models import (
@@ -97,12 +98,13 @@ def analyze_symbol(
             last_price=None,
             warnings=warnings,
             data_quality=data_quality,
+            evidence=[gate_evidence("insufficient_daily_data")],
         )
         return annotate_signal_result(result, market)
 
     tech = tech_summary(daily)
     intraday_data = intraday_snapshot(intraday)
-    contributions, reasons, risks = score_components(
+    scored = score_components(
         symbol,
         tech,
         fundamentals,
@@ -113,6 +115,11 @@ def analyze_symbol(
         getattr(config, "strategy", None),
         profile,
     )
+    if len(scored) == 4:
+        contributions, reasons, risks, evidence = scored
+    else:  # test doubles may still return the legacy 3-tuple
+        contributions, reasons, risks = scored
+        evidence = []
     raw_score = sum(contributions.values())
     score = int(max(0, min(100, round(raw_score))))
 
@@ -193,6 +200,9 @@ def analyze_symbol(
     if warnings:
         risks.extend(warnings[:3])
 
+    # Every suppression code becomes a machine-readable gate evidence item.
+    evidence = list(evidence) + [gate_evidence(code) for code in suppressed_by]
+
     result = _result(
         rank=0,
         symbol=symbol,
@@ -215,6 +225,7 @@ def analyze_symbol(
         rejection_reasons=rejection_reasons,
         validation_warnings=validation_warnings,
         data_quality=data_quality,
+        evidence=evidence,
     )
     result.sector_bucket = profile.sector or ""
     return annotate_signal_result(result, market)
@@ -289,6 +300,7 @@ def _result(
     rejection_reasons: Optional[list[str]] = None,
     validation_warnings: Optional[list[str]] = None,
     data_quality: Optional[DataQuality] = None,
+    evidence: Optional[list] = None,
 ) -> SignalResult:
     # Identity only: symbol + action + setup. Score and price-derived plan
     # fields drift on every data refresh, and a changed hash bypasses the
@@ -324,6 +336,7 @@ def _result(
         plan_kind=plan_kind,
         validation_warnings=validation_warnings or [],
         data_quality=data_quality or DataQuality(),
+        evidence=evidence or [],
     )
 
 

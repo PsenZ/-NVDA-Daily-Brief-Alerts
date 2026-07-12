@@ -150,6 +150,30 @@ details.contrib summary { cursor: pointer; font-size: 13.5px; display: flex; gap
 details.contrib summary::-webkit-details-marker { display: none; }
 details.contrib summary .sc { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--ink-2); }
 
+/* evidence trail */
+details.ev { margin: 4px 0 6px; }
+details.ev summary {
+  cursor: pointer; font-size: 11.5px; color: var(--muted);
+  letter-spacing: 0.03em;
+}
+details.ev summary::-webkit-details-marker { display: none; }
+.ev-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.ev-list li {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 12px; color: var(--ink-2); padding: 2px 0; line-height: 1.45;
+}
+.ev-list li i { width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center; }
+.ev-list li.pos i { background: var(--pos); }
+.ev-list li.neg i { background: var(--neg); }
+.ev-list li.mut i { background: var(--muted); }
+.ev-list code {
+  font-size: 10px; color: var(--muted); background: var(--page);
+  border: 1px solid var(--grid); border-radius: 4px; padding: 0 4px;
+  white-space: nowrap;
+}
+.ev-list .pts { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--ink); }
+.ev-list .val { color: var(--muted); }
+
 /* tables */
 .tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .tbl th {

@@ -159,7 +159,7 @@ def test_sector_resonance_is_registry_driven():
     )
 
     def resonance(symbol):
-        contributions, _r, _k = score_components(
+        contributions, _reasons, _risks, _evidence = score_components(
             symbol, full_snapshot, FundamentalsData(), None,
             news_bundle(0.0), bullish_market(),
         )

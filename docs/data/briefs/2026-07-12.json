@@ -62,20 +62,242 @@
    ],
    "contributions": {
     "base": 35.0,
-    "discipline": -4.0,
+    "discipline": 0.0,
     "event_risk": 4.0,
-    "market_environment": 11.0,
-    "momentum": 18.0,
-    "news_sentiment": 8.0,
-    "relative_strength": 9.5,
-    "sector_resonance": 7.0,
-    "trend": 26.0,
-    "volatility_options": -3.0,
+    "market_environment": 15.0,
+    "momentum": 32.0,
+    "news_sentiment": 10.0,
+    "relative_strength": 7.425,
+    "sector_resonance": 4.0,
+    "trend": 42.0,
+    "volatility_options": 12.0,
     "volume": 12.0
    },
    "conviction_level": "high",
    "data_quality_level": "MEDIUM",
    "decision_balance": "mixed",
+   "evidence": [
+    {
+     "code": "TREND_MA_STACK",
+     "component": "trend",
+     "confidence": "rule",
+     "points": 10,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "Short moving averages are stacked higher, supporting a trend-following bias.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "TREND_ABOVE_SMA20_50",
+     "component": "trend",
+     "confidence": "rule",
+     "points": 18,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "Price remains above SMA20 and SMA50, keeping the intermediate trend constructive.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "TREND_ABOVE_SMA200",
+     "component": "trend",
+     "confidence": "rule",
+     "points": 8,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "Price is still above SMA200, keeping the long-term structure supportive.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "TREND_NEAR_55D_HIGH",
+     "component": "trend",
+     "confidence": "rule",
+     "points": 6,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "Price is trading near the 55-day high, which supports a trend continuation read.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "MOM_MACD_EXPANDING",
+     "component": "momentum",
+     "confidence": "rule",
+     "points": 12,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "MACD is above signal and the histogram is expanding, showing improving momentum.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "MOM_RSI_HEALTHY",
+     "component": "momentum",
+     "confidence": "rule",
+     "points": 10,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "RSI remains in a healthy range without obvious overheating.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": 58.0
+    },
+    {
+     "code": "MOM_ADX_TREND",
+     "component": "momentum",
+     "confidence": "rule",
+     "points": 10,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "ADX is above 25 with +DI leading, which supports trend persistence.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": 28.0
+    },
+    {
+     "code": "RS_BASELINE",
+     "component": "relative_strength",
+     "confidence": "rule",
+     "points": 5.0,
+     "polarity": "info",
+     "source": "technical",
+     "text": "Relative-strength baseline.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "RS_SPREAD_NEUTRAL",
+     "component": "relative_strength",
+     "confidence": "rule",
+     "points": 2.425,
+     "polarity": "info",
+     "source": "technical",
+     "text": "20-session performance spread vs SPY/QQQ.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": 2.42
+    },
+    {
+     "code": "VOL_SURGE_5D",
+     "component": "volume",
+     "confidence": "rule",
+     "points": 12,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "Volume is running above twice the 5-day average, which improves breakout confirmation.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": 2.2
+    },
+    {
+     "code": "VOLOPT_BASELINE",
+     "component": "volatility_options",
+     "confidence": "rule",
+     "points": 5.0,
+     "polarity": "info",
+     "source": "technical",
+     "text": "Volatility/options baseline.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "OPT_IV_LOW",
+     "component": "volatility_options",
+     "confidence": "rule",
+     "points": 3,
+     "polarity": "info",
+     "source": "options",
+     "text": "Implied volatility is subdued.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": 0.38
+    },
+    {
+     "code": "OPT_PC_SUPPORTIVE",
+     "component": "volatility_options",
+     "confidence": "rule",
+     "points": 4,
+     "polarity": "reason",
+     "source": "options",
+     "text": "Put/Call volume is supportive of a more constructive bias.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": 0.65
+    },
+    {
+     "code": "NEWS_SENT_POSITIVE",
+     "component": "news_sentiment",
+     "confidence": "rule",
+     "points": 8,
+     "polarity": "reason",
+     "source": "news",
+     "text": "Headline and social sentiment remain constructive.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": 0.3
+    },
+    {
+     "code": "NEWS_COVERAGE",
+     "component": "news_sentiment",
+     "confidence": "rule",
+     "points": 2,
+     "polarity": "info",
+     "source": "news",
+     "text": "Recent news coverage exists.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": 1
+    },
+    {
+     "code": "SECTOR_BENCH_STRONG",
+     "component": "sector_resonance",
+     "confidence": "rule",
+     "points": 4,
+     "polarity": "reason",
+     "source": "market",
+     "text": "SMH sector strength is supporting follow-through.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": 3.96
+    },
+    {
+     "code": "FUND_RECO_BUY",
+     "component": "event_risk",
+     "confidence": "rule",
+     "points": 4,
+     "polarity": "info",
+     "source": "fundamental",
+     "text": "Street consensus leans buy.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": "buy"
+    },
+    {
+     "code": "MARKET_ENV_SCORE",
+     "component": "market_environment",
+     "confidence": "rule",
+     "points": 15.0,
+     "polarity": "info",
+     "source": "market",
+     "text": "Market-environment score (clipped).",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": 18.0
+    },
+    {
+     "code": "MARKET_RISK_ON_NOTE",
+     "component": "market_environment",
+     "confidence": "rule",
+     "points": null,
+     "polarity": "reason",
+     "source": "market",
+     "text": "The market filter remains in a risk-on state.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "BASE_SCORE",
+     "component": "base",
+     "confidence": "rule",
+     "points": 35.0,
+     "polarity": "info",
+     "source": "technical",
+     "text": "Base score.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    }
+   ],
    "is_actionable": true,
    "last_price": 100.0,
    "market_evidence": [
@@ -124,19 +346,12 @@
     "bull case"
    ],
    "contributions": {
-    "base": 35.0,
-    "discipline": 7.0,
-    "market_environment": 11.0,
-    "momentum": -6.0,
-    "relative_strength": 2.0,
-    "sector_resonance": 3.0,
-    "trend": 8.0,
-    "volatility_options": 5.0,
-    "volume": 5.0
+    "trend": 10.0
    },
    "conviction_level": "low",
    "data_quality_level": "MEDIUM",
    "decision_balance": "mixed",
+   "evidence": [],
    "is_actionable": false,
    "last_price": 100.0,
    "market_evidence": [
@@ -185,11 +400,177 @@
     "bull case"
    ],
    "contributions": {
-    "trend": 10.0
+    "base": 35.0,
+    "discipline": 0.0,
+    "event_risk": 0.0,
+    "market_environment": 15.0,
+    "momentum": 32.0,
+    "news_sentiment": 0.0,
+    "relative_strength": 7.425,
+    "sector_resonance": 0.0,
+    "trend": 42.0,
+    "volatility_options": 5.0,
+    "volume": 4.0
    },
    "conviction_level": "high",
    "data_quality_level": "MEDIUM",
    "decision_balance": "mixed",
+   "evidence": [
+    {
+     "code": "TREND_MA_STACK",
+     "component": "trend",
+     "confidence": "rule",
+     "points": 10,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "Short moving averages are stacked higher, supporting a trend-following bias.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "TREND_ABOVE_SMA20_50",
+     "component": "trend",
+     "confidence": "rule",
+     "points": 18,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "Price remains above SMA20 and SMA50, keeping the intermediate trend constructive.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "TREND_ABOVE_SMA200",
+     "component": "trend",
+     "confidence": "rule",
+     "points": 8,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "Price is still above SMA200, keeping the long-term structure supportive.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "TREND_NEAR_55D_HIGH",
+     "component": "trend",
+     "confidence": "rule",
+     "points": 6,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "Price is trading near the 55-day high, which supports a trend continuation read.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "MOM_MACD_EXPANDING",
+     "component": "momentum",
+     "confidence": "rule",
+     "points": 12,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "MACD is above signal and the histogram is expanding, showing improving momentum.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "MOM_RSI_HEALTHY",
+     "component": "momentum",
+     "confidence": "rule",
+     "points": 10,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "RSI remains in a healthy range without obvious overheating.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": 48.0
+    },
+    {
+     "code": "MOM_ADX_TREND",
+     "component": "momentum",
+     "confidence": "rule",
+     "points": 10,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "ADX is above 25 with +DI leading, which supports trend persistence.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": 28.0
+    },
+    {
+     "code": "RS_BASELINE",
+     "component": "relative_strength",
+     "confidence": "rule",
+     "points": 5.0,
+     "polarity": "info",
+     "source": "technical",
+     "text": "Relative-strength baseline.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "RS_SPREAD_NEUTRAL",
+     "component": "relative_strength",
+     "confidence": "rule",
+     "points": 2.425,
+     "polarity": "info",
+     "source": "technical",
+     "text": "20-session performance spread vs SPY/QQQ.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": 2.42
+    },
+    {
+     "code": "VOL_LIGHT_PULLBACK",
+     "component": "volume",
+     "confidence": "rule",
+     "points": 4,
+     "polarity": "reason",
+     "source": "technical",
+     "text": "The pullback is happening on lighter 5-day volume, which fits a constructive retracement.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": 0.6
+    },
+    {
+     "code": "VOLOPT_BASELINE",
+     "component": "volatility_options",
+     "confidence": "rule",
+     "points": 5.0,
+     "polarity": "info",
+     "source": "technical",
+     "text": "Volatility/options baseline.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "MARKET_ENV_SCORE",
+     "component": "market_environment",
+     "confidence": "rule",
+     "points": 15.0,
+     "polarity": "info",
+     "source": "market",
+     "text": "Market-environment score (clipped).",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": 18.0
+    },
+    {
+     "code": "MARKET_RISK_ON_NOTE",
+     "component": "market_environment",
+     "confidence": "rule",
+     "points": null,
+     "polarity": "reason",
+     "source": "market",
+     "text": "The market filter remains in a risk-on state.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    },
+    {
+     "code": "BASE_SCORE",
+     "component": "base",
+     "confidence": "rule",
+     "points": 35.0,
+     "polarity": "info",
+     "source": "technical",
+     "text": "Base score.",
+     "timestamp": "2026-07-12T07:35:00+10:00",
+     "value": null
+    }
+   ],
    "is_actionable": true,
    "last_price": 100.0,
    "market_evidence": [
@@ -244,6 +625,7 @@
    "conviction_level": "low",
    "data_quality_level": "MEDIUM",
    "decision_balance": "mixed",
+   "evidence": [],
    "is_actionable": false,
    "last_price": 100.0,
    "market_evidence": [
@@ -300,6 +682,7 @@
    "conviction_level": "low",
    "data_quality_level": "MEDIUM",
    "decision_balance": "mixed",
+   "evidence": [],
    "is_actionable": false,
    "last_price": 100.0,
    "market_evidence": [
@@ -348,7 +731,7 @@
   "setup_type:breakout_entry avg 5D alpha +1.20% over 4 resolved decision(s). (t=+2.10, n=4: not significant)"
  ],
  "sample": true,
- "schema_version": 1,
+ "schema_version": 2,
  "summary": {
   "approved": 1,
   "deferred": 1,
