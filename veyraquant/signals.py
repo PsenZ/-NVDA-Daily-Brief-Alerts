@@ -13,6 +13,7 @@ from .constants import (
     MARKET_EVIDENCE_MARKERS,
 )
 from .features import intraday_snapshot, tech_summary
+from .instruments import InstrumentProfile, default_profile
 from .models import (
     DataQuality,
     FundamentalsData,
@@ -61,10 +62,13 @@ def analyze_symbol(
     config: AppConfig,
     warnings: Optional[list[str]] = None,
     data_quality: Optional[DataQuality] = None,
+    profile: Optional[InstrumentProfile] = None,
 ) -> SignalResult:
     warnings = list(warnings or [])
     data_quality = data_quality or DataQuality()
-    if daily is None or daily.empty or len(daily) < 60:
+    profile = profile or default_profile(symbol)
+    min_bars = max(60, int(getattr(profile, "min_history_bars", 60) or 60))
+    if daily is None or daily.empty or len(daily) < min_bars:
         data_quality.data_quality_level = "LOW"
         data_quality.actionable_allowed = False
         data_quality.reasons.append("daily history is unavailable or too short")
@@ -107,6 +111,7 @@ def analyze_symbol(
         market,
         config.social_sentiment_threshold,
         getattr(config, "strategy", None),
+        profile,
     )
     raw_score = sum(contributions.values())
     score = int(max(0, min(100, round(raw_score))))
@@ -130,6 +135,24 @@ def analyze_symbol(
         )
         suppressed_by.append("earnings_blackout")
         action = "WATCH"
+    if action in ACTIONABLE_ACTIONS and (profile.is_leveraged or profile.is_inverse):
+        risks.append(
+            "Leveraged/inverse products break the swing-long assumptions "
+            "(decay, path dependence); no fresh entries by policy."
+        )
+        suppressed_by.append("leveraged_product_policy")
+        action = "WATCH"
+    if action in ACTIONABLE_ACTIONS and profile.min_avg_dollar_volume:
+        avg_dollar_volume = float(
+            (daily["Close"] * daily["Volume"]).tail(20).mean()
+        )
+        if avg_dollar_volume < profile.min_avg_dollar_volume:
+            risks.append(
+                f"Average dollar volume ${avg_dollar_volume:,.0f} is below the "
+                f"${profile.min_avg_dollar_volume:,.0f} liquidity floor."
+            )
+            suppressed_by.append("insufficient_liquidity")
+            action = "WATCH"
     if action in ACTIONABLE_ACTIONS:
         preview_plan = preview_trade_plan(action, tech, config)
         if preview_plan.rr < config.min_rr and preview_plan.position_pct > 0:
@@ -193,6 +216,7 @@ def analyze_symbol(
         validation_warnings=validation_warnings,
         data_quality=data_quality,
     )
+    result.sector_bucket = profile.sector or ""
     return annotate_signal_result(result, market)
 
 

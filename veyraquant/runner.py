@@ -177,6 +177,7 @@ def build_results(symbol_data_items: list[SymbolData], market, config: AppConfig
             config,
             item.warnings,
             item.data_quality,
+            profile=getattr(item, "profile", None),
         )
         for item in symbol_data_items
     ]
