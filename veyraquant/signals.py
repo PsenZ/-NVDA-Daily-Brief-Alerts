@@ -120,6 +120,19 @@ def analyze_symbol(
     else:  # test doubles may still return the legacy 3-tuple
         contributions, reasons, risks = scored
         evidence = []
+    # observed_at is the DATA time: scoring evidence derives from the last
+    # completed daily bar. News timestamps are not reliably available, so
+    # news items stay None rather than borrowing the bar time.
+    last_bar_iso = None
+    try:
+        last_bar_iso = daily.index[-1].isoformat()
+    except Exception:
+        pass
+    if last_bar_iso:
+        for item in evidence:
+            if getattr(item, "observed_at", None) is None and item.source != "news":
+                item.observed_at = last_bar_iso
+    gate_context: dict[str, dict] = {}
     raw_score = sum(contributions.values())
     score = int(max(0, min(100, round(raw_score))))
 
@@ -141,6 +154,10 @@ def analyze_symbol(
             "new entries are blocked inside the earnings blackout window."
         )
         suppressed_by.append("earnings_blackout")
+        gate_context["earnings_blackout"] = {
+            "value": days_to_earnings,
+            "threshold": blackout_days,
+        }
         action = "WATCH"
     if action in ACTIONABLE_ACTIONS and (profile.is_leveraged or profile.is_inverse):
         risks.append(
@@ -159,6 +176,11 @@ def analyze_symbol(
                 f"${profile.min_avg_dollar_volume:,.0f} liquidity floor."
             )
             suppressed_by.append("insufficient_liquidity")
+            gate_context["insufficient_liquidity"] = {
+                "value": round(avg_dollar_volume, 2),
+                "threshold": profile.min_avg_dollar_volume,
+                "observed_at": last_bar_iso,
+            }
             action = "WATCH"
     if action in ACTIONABLE_ACTIONS:
         preview_plan = preview_trade_plan(action, tech, config)
@@ -167,6 +189,10 @@ def analyze_symbol(
                 f"RR {preview_plan.rr:.2f} is below the minimum requirement {config.min_rr:.2f}."
             )
             suppressed_by.append("rr_below_min")
+            gate_context["rr_below_min"] = {
+                "value": preview_plan.rr,
+                "threshold": config.min_rr,
+            }
             action = "WATCH"
 
     signal_type = ACTION_TO_SIGNAL_TYPE[action]
@@ -200,8 +226,11 @@ def analyze_symbol(
     if warnings:
         risks.extend(warnings[:3])
 
-    # Every suppression code becomes a machine-readable gate evidence item.
-    evidence = list(evidence) + [gate_evidence(code) for code in suppressed_by]
+    # Every suppression code becomes a machine-readable gate evidence item,
+    # carrying the measured value and threshold captured at the veto site.
+    evidence = list(evidence) + [
+        gate_evidence(code, **gate_context.get(code, {})) for code in suppressed_by
+    ]
 
     result = _result(
         rank=0,

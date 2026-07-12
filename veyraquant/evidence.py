@@ -10,6 +10,7 @@ via a registry, so every rejection carries a machine-readable reason.
 Invariant (tested): for each contribution component, the sum of evidence
 points equals the contribution value - every point is accounted for.
 """
+import hashlib
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -23,11 +24,26 @@ class EvidenceItem:
     points: Optional[float] = None
     source: str = "technical"
     value: Any = None
-    confidence: str = "rule"
-    timestamp: Optional[str] = None  # stamped at export time with the run time
+    # R3.5 metadata: confidence is numeric (None for deterministic rules -
+    # the old "rule" string moved to method); threshold records the rule
+    # boundary the value was compared against; observed_at is the DATA
+    # timestamp (e.g. the daily bar), never the export time; timestamp
+    # remains the serialization time stamped at export.
+    confidence: Optional[float] = None
+    method: str = "deterministic_rule"
+    threshold: Any = None
+    observed_at: Optional[str] = None
+    timestamp: Optional[str] = None
+    evidence_id: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.evidence_id:
+            raw = f"{self.code}|{self.component}|{self.polarity}|{self.text}|{self.value}"
+            self.evidence_id = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "evidence_id": self.evidence_id,
             "code": self.code,
             "text": self.text,
             "polarity": self.polarity,
@@ -36,6 +52,9 @@ class EvidenceItem:
             "source": self.source,
             "value": self.value,
             "confidence": self.confidence,
+            "method": self.method,
+            "threshold": self.threshold,
+            "observed_at": self.observed_at,
             "timestamp": self.timestamp,
         }
 
@@ -88,7 +107,13 @@ GATE_REGISTRY: dict[str, tuple[str, str]] = {
 }
 
 
-def gate_evidence(code: str, text: str | None = None) -> EvidenceItem:
+def gate_evidence(
+    code: str,
+    text: str | None = None,
+    value: Any = None,
+    threshold: Any = None,
+    observed_at: str | None = None,
+) -> EvidenceItem:
     source, description = GATE_REGISTRY.get(code, ("policy", "Suppressed by policy gate."))
     return EvidenceItem(
         code=code.upper(),
@@ -97,6 +122,9 @@ def gate_evidence(code: str, text: str | None = None) -> EvidenceItem:
         component="gate",
         points=None,
         source=source,
+        value=value,
+        threshold=threshold,
+        observed_at=observed_at,
     )
 
 

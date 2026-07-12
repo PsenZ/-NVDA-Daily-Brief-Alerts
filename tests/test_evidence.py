@@ -170,3 +170,54 @@ def test_rs_split_keeps_point_sum_invariant():
             sums[item.component] += item.points
     for component, value in contributions.items():
         assert abs(sums[component] - value) < 1e-9
+
+
+# --- R3.5: evidence metadata enrichment ---
+
+def test_evidence_id_is_deterministic_and_timestamp_free():
+    from veyraquant.evidence import EvidenceItem
+
+    a = EvidenceItem("MOM_RSI_HEALTHY", "RSI healthy.", "reason", "momentum", 10, value=58.0)
+    b = EvidenceItem("MOM_RSI_HEALTHY", "RSI healthy.", "reason", "momentum", 10, value=58.0,
+                     timestamp="2026-07-13T00:00:00")
+    c = EvidenceItem("MOM_RSI_HEALTHY", "RSI healthy.", "reason", "momentum", 10, value=61.0)
+    assert a.evidence_id == b.evidence_id          # export time never enters the id
+    assert a.evidence_id != c.evidence_id          # measured value does
+    assert a.method == "deterministic_rule"
+    assert a.confidence is None                    # numeric-or-None, not "rule"
+
+
+def test_gates_carry_value_threshold_and_observed_at(monkeypatch):
+    from veyraquant.models import FundamentalsData
+    from veyraquant.signals import analyze_symbol
+    from test_signal_consistency import (
+        breakout_snapshot, bullish_market, dummy_daily, make_config, news_bundle, score_result,
+    )
+
+    monkeypatch.setattr("veyraquant.signals.tech_summary", lambda _d: breakout_snapshot())
+    monkeypatch.setattr("veyraquant.signals.intraday_snapshot", lambda _i: None)
+    monkeypatch.setattr("veyraquant.signals.score_components", lambda *a, **k: score_result(72))
+
+    result = analyze_symbol(
+        "NVDA", dummy_daily(), None, FundamentalsData(days_to_earnings=1), None,
+        news_bundle(0.0), bullish_market(), make_config(),
+    )
+    gate = next(item for item in result.evidence if item.code == "EARNINGS_BLACKOUT")
+    assert gate.value == 1 and gate.threshold == 3  # measured vs rule boundary
+
+
+def test_observed_at_uses_bar_time_not_export_time(monkeypatch):
+    from veyraquant.models import FundamentalsData
+    from veyraquant.signals import analyze_symbol
+    from test_signal_consistency import bullish_market, dummy_daily, make_config, news_bundle
+
+    daily = dummy_daily()
+    result = analyze_symbol(
+        "NVDA", daily, None, FundamentalsData(), None,
+        news_bundle(0.5), bullish_market(), make_config(),
+    )
+    bar_iso = daily.index[-1].isoformat()
+    technical = [i for i in result.evidence if i.source == "technical" and i.points]
+    news_items = [i for i in result.evidence if i.source == "news"]
+    assert technical and all(i.observed_at == bar_iso for i in technical)
+    assert news_items and all(i.observed_at is None for i in news_items)
