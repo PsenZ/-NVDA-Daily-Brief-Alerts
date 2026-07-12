@@ -335,6 +335,101 @@ def signals_from_pipeline(
     return signals
 
 
+def portfolio_signals_from_pipeline(
+    frames: dict[str, pd.DataFrame],
+    config: Any,
+    market_histories: dict[str, pd.DataFrame | None] | None = None,
+    first_signal_bar: int = 80,
+) -> list[TradeSignal]:
+    """Multi-symbol signal generation through the REAL approval chain.
+
+    Per historical date, every symbol is analyzed, ranked and passed
+    through decision_manager.apply_portfolio_manager - the same code
+    path the live nightly run uses - so historical approved/deferred
+    decisions, sector budgets, daily capacity and the global-heat
+    haircut are identical to production. Only approved results become
+    TradeSignals, sized with the POST-haircut max_loss_pct.
+    """
+    from .backtest import _market_slice
+    from .decision_manager import apply_portfolio_manager
+    from .instruments import default_profile
+    from .market import build_market_context
+    from .models import FundamentalsData, NewsBundle
+    from .signals import analyze_symbol, assign_ranks
+
+    news = NewsBundle([], [], {"score": 0.0, "label": "中性", "sample_size": 0})
+    index_of = {
+        symbol: {ts: i for i, ts in enumerate(frame.index)}
+        for symbol, frame in frames.items()
+    }
+    profiles = {symbol: default_profile(symbol) for symbol in frames}
+    timeline = sorted({ts for frame in frames.values() for ts in frame.index})
+    signals: list[TradeSignal] = []
+
+    for ts in timeline:
+        day_results = []
+        day_index: dict[str, int] = {}
+        market = None
+        for symbol, frame in frames.items():
+            idx = index_of[symbol].get(ts)
+            if idx is None or idx < max(80, first_signal_bar) or idx >= len(frame) - 1:
+                continue
+            if market is None:
+                market = build_market_context(_market_slice(market_histories, ts))
+            window = frame.iloc[: idx + 1]
+            result = analyze_symbol(
+                symbol, window, None, FundamentalsData(), None, news, market, config,
+                profile=profiles[symbol],
+            )
+            day_results.append(result)
+            day_index[symbol] = idx
+        if not day_results or market is None:
+            continue
+
+        ranked = assign_ranks(day_results)
+        reviewed, _notes = apply_portfolio_manager(ranked, market, config)
+        for result in reviewed:
+            if result.portfolio_decision != "approved":
+                continue
+            plan = result.trade_plan
+            if plan.stop_price is None or plan.target1 is None:
+                continue
+            signals.append(
+                TradeSignal(
+                    symbol=result.symbol,
+                    signal_idx=day_index[result.symbol],
+                    stop_price=float(plan.stop_price),
+                    target_price=float(plan.target1),
+                    risk_pct=float(result.max_loss_pct),  # post-haircut
+                    score=float(result.score),
+                    action=result.action,
+                    portfolio_decision=result.portfolio_decision,
+                    setup_type=result.setup_type,
+                    market_regime=result.market_regime,
+                    sector=result.sector_bucket or profiles[result.symbol].sector,
+                    data_quality=result.data_quality.data_quality_level,
+                )
+            )
+    return signals
+
+
+def run_portfolio_backtest(
+    frames: dict[str, pd.DataFrame],
+    config: Any,
+    market_histories: dict[str, pd.DataFrame | None] | None = None,
+    first_signal_bar: int = 80,
+    slippage_bps: float = 0.0,
+    holding_bars: int = 5,
+) -> EventBacktestResult:
+    """Convenience: real approval chain + event engine in one call."""
+    signals = portfolio_signals_from_pipeline(
+        frames, config, market_histories, first_signal_bar
+    )
+    return run_event_backtest(
+        frames, signals, config, slippage_bps=slippage_bps, holding_bars=holding_bars
+    )
+
+
 def _summarize(
     closed: list[SimTrade],
     curve: list[tuple[Any, float]],
