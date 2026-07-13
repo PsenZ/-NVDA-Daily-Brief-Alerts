@@ -473,10 +473,72 @@ This is a rules-based research assistant, not a statistically validated alpha mo
 
 本项目是规则型研究助手，不是经过统计验证的 alpha 模型。日报、提醒、回测和决策复盘都属于诊断工具，不应被视为未来收益的证明。
 
-## Dashboard & Operations / 驾驶舱与运维
+## Dashboard & Operations / 仪表盘与运维
 
-- **Dashboard / 驾驶舱**: static site under `docs/`, fed by `docs/data/*.json` exported after every real nightly send. Enable GitHub Pages: Settings → Pages → Deploy from a branch → `main` + `/docs`. URL: `https://<owner>.github.io/veyraquant/`. The committed seed data (marked "sample") renders until the first real export overwrites it.
-- **驾驶舱**：`docs/` 下的纯静态站点，读取每次夜间真实发送后导出的 `docs/data/*.json`。开启方式：Settings → Pages → Deploy from a branch → `main` + `/docs`。首次真实导出前显示"样例数据"。
+- **Dashboard / 仪表盘**: static site under `docs/`, fed by `docs/data/*.json` exported after every real nightly send. Enable GitHub Pages: Settings → Pages → Deploy from a branch → `main` + `/docs`. URL: `https://<owner>.github.io/veyraquant/`. The committed seed data (marked "sample") renders until the first real export overwrites it.
+- **仪表盘**：`docs/` 下的纯静态站点，读取每次夜间真实发送后导出的 `docs/data/*.json`。开启方式：Settings → Pages → Deploy from a branch → `main` + `/docs`。首次真实导出前显示"样例数据"。
 - **Watchlist via Variables / 用 Variables 配股票池**: set repository Variables (Settings → Secrets and variables → Actions → Variables): `SYMBOLS`, `MARKET_SYMBOLS`, optional `SECTOR_MAP_JSON` / `SECTOR_RISK_LIMITS_JSON` / `SECTOR_POSITION_LIMITS_JSON`. Unset variables fall back to the defaults in `daily.yml` — no YAML edit needed to change the watchlist.
 - **Workflows / 调度**: `daily.yml` runs the full pipeline nightly after the US close (brief email + armed plans + dashboard export); `intraday.yml` checks frozen plan levels every 10 minutes during US regular hours and alerts once per plan on trigger/invalidation; `ci.yml` runs pytest + compileall on every push/PR.
 - **Research CLIs / 研究工具**: `python -m veyraquant.memory_review` (decision-log statistics with t-stats and horizon comparison), `python walkforward.py` (out-of-sample threshold evaluation, net of costs).
+
+---
+
+## Capabilities, Boundaries & Operating Guide / 能力、边界与操作指南
+
+> This section is the authoritative summary of what the system on `main` actually does. It reflects the merged pipeline (E0–R8/R7), not any single feature branch. 本节是 `main` 当前真实行为的权威总结。
+
+### What it is / 定位
+
+A **rules-based, semi-automated US-equity swing-trading research assistant**. It produces a daily decision brief by email and optional intraday opportunity/risk alerts. It is decision support: **it never places orders, connects to a broker, or stores brokerage credentials.**
+
+规则型、半自动的美股波段交易研究助手。生成每日邮件简报和可选盘中提醒。**不下单、不连券商、不存券商凭证。**
+
+### Hard boundaries / 硬性边界
+
+- **Not a validated alpha model.** Scoring weights are hand-set hypotheses. There is no out-of-sample proof of edge yet; the walk-forward tooling exists to *test* that claim once enough resolved decisions accumulate. Treat it as a discipline tool, not a predictor. 评分权重是人工假设，尚无样本外 edge 证据；把它当纪律工具，不是预测器。
+- **Daily-timeframe by design.** Free yfinance + RSS data supports daily decisions, not minute-level trading. The two-tier architecture (nightly frozen plans + intraday level triggers) reflects this. 免费数据只支撑日线级；两级架构（夜间冻结计划 + 盘中电平触发）正是这个定位的产物。
+- **US market only.** The instrument registry classifies US tickers (stock/ETF/index/crypto) with leveraged/inverse/ADR flags, liquidity and history gates. Non-US symbols are out of scope. 仅美股。
+- **5-day holding, 2×ATR stop.** An earnings gap can wipe out several normal trades — hence the earnings-blackout veto. 持有 5 天、止损 2×ATR；财报静默期否决保护跳空风险。
+- **Every trade plan requires human review.** No automatic execution. 所有计划需人工复核。
+
+### Two-tier signal flow / 两级信号
+
+1. **Nightly (after US close)** — full pipeline on *completed* daily bars: score → classify → veto gates → trade plan + validation → portfolio approval (heat cap, sector budgets, approval caps, correlation-aware sizing) → email + freeze approved plans to `state/armed_plans.json` + export dashboard JSON + write `docs/data/health.json`. 夜间用完成日线跑全管线，冻结批准计划、导出数据、写健康清单。
+2. **Intraday (US regular hours, every 10 min)** — checks frozen plan price levels only, never re-scores: price enters the frozen entry zone → TRIGGER; hits the frozen stop → INVALIDATED; each plan alerts once. 盘中只对冻结计划做电平检测，不重算评分，一次性告警。
+
+### Veto gates (machine-readable reason codes) / 否决门
+
+`market_risk_off`, `negative_news_veto`, `earnings_blackout`, `leveraged_product_policy`, `insufficient_liquidity`, `rr_below_min`, `trade_plan_validation_failed`, `data_quality_gate`, `insufficient_daily_data`. Every rejection carries a code and an evidence item.
+
+### Risk framework (seven layers) / 七层风控
+
+fixed-fraction risk per trade (0.5%) → ATR stop → RR floor (1.5) → per-symbol position cap (10%) → global portfolio heat cap (3%, allocated *after* approval with proportional haircut) → sector risk/position budgets → market-regime approval caps (risk-on 3 / neutral 2 / risk-off 0). Highly correlated approved names are additionally size-halved (R7).
+
+### Deploy / 部署
+
+1. Fork the repo; enable Actions.
+2. **Secrets** (Settings → Secrets and variables → Actions → Secrets): `SMTP_USER`, `SMTP_APP_PASSWORD`, `FROM_EMAIL`, `TO_EMAIL`; optional `POSITIONS_JSON` (private holdings, never committed).
+3. **Variables** (optional watchlist override): `SYMBOLS`, `MARKET_SYMBOLS`, `SECTOR_MAP_JSON`, …
+4. **GitHub Pages** for the dashboard: Settings → Pages → Deploy from a branch → `main` + `/docs`.
+5. Workflows run themselves: `daily.yml` (nightly full run), `intraday.yml` (RTH triggers), `ci.yml` (tests on push/PR).
+
+### Local use / 本地使用
+
+```bash
+python -m venv .venv && source .venv/Scripts/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python -m pytest                                          # must be all green (201 tests)
+DRY_RUN=true FORCE_DAILY_REPORT=true SYMBOLS=NVDA python report.py   # dry run, no email/state
+```
+
+### Research & health CLIs / 研究与健康工具
+
+- `python -m veyraquant.memory_review` — decision-log statistics: per-bucket alpha with t-stats, 95% CI, significance gate, score bands, holding-horizon comparison. Meaningful only after ~30 resolved decisions accumulate. 决策日志统计，需积累约 30 条已回填决策才有意义。
+- `python walkforward.py` — walk-forward threshold tuning on the event-driven engine with cost model and failure-attribution (setup / regime / sector / data-quality cuts); refuses to claim edge under 30 validation trades. 事件引擎 walk-forward + 失败归因；不足 30 笔不下结论。
+- `docs/data/health.json` + dashboard System Health card — last run time/duration, symbols live/cache/failed, email/export status, intraday heartbeat. 运行健康清单与仪表盘健康卡。
+
+### Honesty about effectiveness / 关于有效性的诚实说明
+
+As a **decision-support and risk-discipline system**: effective and mature. As a **money-making alpha system**: unproven, and provable only after months of real running that fill the decision log, then reading the review/walk-forward CLIs above. Until then, use the discipline, not the predictions.
+
+作为**决策支持 + 风控纪律系统**：成熟有效。作为**能盈利的 alpha 系统**：未经证明，且只有在系统真实运行数月、决策日志积累后、通过上述复盘工具才能验证。在那之前，用它的纪律，别信它的预测。

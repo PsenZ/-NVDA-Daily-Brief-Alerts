@@ -4,7 +4,7 @@
 
 const I18N = {
   zh: {
-    "title": "VeyraQuant 驾驶舱",
+    "title": "VeyraQuant 仪表盘",
     "sample": "样例数据",
     "sec.market": "市场滤镜",
     "sec.funnel": "审批漏斗",
