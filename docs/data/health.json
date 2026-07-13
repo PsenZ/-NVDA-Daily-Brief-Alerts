@@ -1,11 +1,11 @@
 {
  "alerts_sent": 0,
  "cache_hit_rate_pct": 0.0,
- "data_fetch_seconds": 9.41,
- "duration_seconds": 14.26,
+ "data_fetch_seconds": 10.05,
+ "duration_seconds": 14.22,
  "email_sent": true,
  "export_ok": true,
- "finished_at": "2026-07-12T21:26:35.494248+00:00",
+ "finished_at": "2026-07-13T09:00:20.502804+00:00",
  "health_schema_version": 1,
  "intraday_heartbeat": {
   "checked_plans": 3,
@@ -16,9 +16,9 @@
   "started_at": "2026-07-12T14:40:03+00:00",
   "transitions": 1
  },
- "run_id": "2026-07-12T21:26:21.235878+00:00",
+ "run_id": "2026-07-13T09:00:06.280639+00:00",
  "run_kind": "daily",
- "started_at": "2026-07-12T21:26:21.235878+00:00",
+ "started_at": "2026-07-13T09:00:06.280639+00:00",
  "symbols": [
   {
    "data_quality_level": "HIGH",
@@ -31,14 +31,14 @@
    "data_quality_level": "HIGH",
    "intraday_freshness": "live",
    "price_freshness": "live",
-   "symbol": "QQQ",
+   "symbol": "AMD",
    "warnings": 0
   },
   {
    "data_quality_level": "HIGH",
    "intraday_freshness": "live",
    "price_freshness": "live",
-   "symbol": "AMD",
+   "symbol": "QQQ",
    "warnings": 0
   },
   {
