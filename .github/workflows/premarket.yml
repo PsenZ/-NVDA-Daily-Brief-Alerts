@@ -1,0 +1,49 @@
+name: VeyraQuant Pre-Market Briefing
+
+on:
+  schedule:
+    # Once ~30-60 min before the US open. Two offsets cover DST: 13:00 UTC
+    # = 9:00 EDT, 14:00 UTC = 9:00 EST. Weekdays only. This job only READS
+    # armed plans and emails a readiness digest - it never touches state,
+    # never uses extended-hours quotes, and never fires a trigger.
+    - cron: "0 13 * * 1-5"
+    - cron: "0 14 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the digest without sending email"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: veyraquant-premarket-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Send pre-market readiness digest
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          python premarket.py
