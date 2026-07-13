@@ -20,9 +20,10 @@ from .reporting import _trading_posture, format_dual_time
 
 logger = logging.getLogger(__name__)
 
+# v4: optional research_notes (R6 agent layer; {} when disabled).
 # v3: evidence items carry evidence_id/method/confidence/threshold/
 # observed_at (data time); item timestamp remains the export time.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def build_brief_payload(
@@ -33,6 +34,7 @@ def build_brief_payload(
     portfolio_notes: Optional[list[str]] = None,
     review_notes: Optional[list[str]] = None,
     sample: bool = False,
+    research_notes: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     approved = [r for r in results if r.portfolio_decision == "approved"]
     deferred = [
@@ -78,6 +80,7 @@ def build_brief_payload(
         "results": [_result_payload(r, now_dt.isoformat()) for r in results],
         "portfolio_notes": list(portfolio_notes or []),
         "review_notes": list(review_notes or []),
+        "research_notes": dict(research_notes or {}),
     }
 
 
@@ -88,6 +91,7 @@ def export_dashboard(
     now_dt: datetime,
     portfolio_notes: Optional[list[str]] = None,
     review_notes: Optional[list[str]] = None,
+    research_notes: Optional[dict[str, Any]] = None,
 ) -> bool:
     """Best-effort export of everything the dashboard reads.
 
@@ -97,7 +101,8 @@ def export_dashboard(
         return False
     try:
         payload = build_brief_payload(
-            results, market, config, now_dt, portfolio_notes, review_notes
+            results, market, config, now_dt, portfolio_notes, review_notes,
+            research_notes=research_notes,
         )
         export_daily_brief(export_dir, payload)
         export_decisions(export_dir, getattr(config, "memory_log_path", ""))

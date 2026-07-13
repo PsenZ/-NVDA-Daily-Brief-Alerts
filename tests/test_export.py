@@ -47,8 +47,9 @@ def test_brief_payload_is_json_serializable_with_expected_shape():
     )
 
     json.dumps(payload)  # must not raise
-    assert payload["schema_version"] == 3
+    assert payload["schema_version"] == 4
     assert payload["date"] == "2026-07-12"
+    assert payload["research_notes"] == {}  # v4 field, empty when disabled
     assert payload["meta"]["symbols"] == ["NVDA", "MSFT"]
     assert payload["meta"]["market_symbols"] == ["SPY", "QQQ", "SMH", "^VIX"]
     assert payload["summary"] == {

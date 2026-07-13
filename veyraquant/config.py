@@ -225,6 +225,14 @@ class AppConfig:
     corr_lookback_days: int = 60
     corr_threshold: float = 0.85
     corr_haircut_factor: float = 0.5
+    # R6 optional research layer: OFF by default; a disabled agent leaves
+    # every output byte-identical. Notes can never alter decisions.
+    enable_agent_research: bool = False
+    agent_provider: str = "openai"
+    agent_model: str = "gpt-4o-mini"
+    agent_max_tokens: int = 400
+    agent_timeout_seconds: float = 30.0
+    agent_cache_path: str = os.path.join("memory", "agent_cache.json")
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -314,4 +322,12 @@ class AppConfig:
             corr_lookback_days=_int_env("CORR_LOOKBACK_DAYS", 60),
             corr_threshold=_float_env("CORR_THRESHOLD", 0.85),
             corr_haircut_factor=_float_env("CORR_HAIRCUT_FACTOR", 0.5),
+            enable_agent_research=_bool_env("ENABLE_AGENT_RESEARCH", False),
+            agent_provider=os.getenv("AGENT_PROVIDER", "openai"),
+            agent_model=os.getenv("AGENT_MODEL", "gpt-4o-mini"),
+            agent_max_tokens=_int_env("AGENT_MAX_TOKENS", 400),
+            agent_timeout_seconds=_float_env("AGENT_TIMEOUT_SECONDS", 30.0),
+            agent_cache_path=os.getenv(
+                "AGENT_CACHE_PATH", os.path.join("memory", "agent_cache.json")
+            ),
         )

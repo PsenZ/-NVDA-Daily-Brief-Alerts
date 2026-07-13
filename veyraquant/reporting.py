@@ -39,6 +39,7 @@ def compose_daily_report(
     now_dt: datetime,
     portfolio_notes: list[str] | None = None,
     review_notes: list[str] | None = None,
+    research_notes: dict | None = None,
 ) -> tuple[str, str]:
     subject = f"{config.subject_prefix} - {now_dt.strftime('%Y-%m-%d')}"
     dual_time = format_dual_time(now_dt)
@@ -113,6 +114,16 @@ def compose_daily_report(
         lines.append("No rejected plans today.")
     for result in rejected:
         lines.extend(_rejected_block(result))
+
+    if research_notes:
+        lines.extend(["", "[Research Notes]"])
+        lines.append("LLM commentary on structured evidence only; not part of any decision.")
+        for symbol in sorted(research_notes):
+            note = research_notes[symbol]
+            lines.append(f"-- {symbol} --")
+            lines.append(f"thesis: {note.get('thesis', '')}")
+            lines.append(f"counter: {note.get('counter_thesis', '')}")
+            lines.append(f"uncertainty: {note.get('uncertainty', '')}")
 
     lines.extend(["", "[System Notes]"])
     notes = _system_notes(results, portfolio_notes or [], review_notes or [])

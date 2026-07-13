@@ -65,19 +65,30 @@ def run(config: AppConfig | None = None) -> int:
     data_fetch_seconds = time.monotonic() - fetch_t0
     results, portfolio_notes = build_results(symbol_data_items, market, config, positions)
     review_notes = brief_review_notes(config.memory_log_path)
+    research_notes: dict = {}
+    if getattr(config, "enable_agent_research", False):
+        try:
+            from .agents.research_summary import generate_research_notes
+
+            research_notes = generate_research_notes(results, config, now_dt)
+        except Exception:
+            logger.warning("Agent research layer failed; continuing without notes.",
+                           exc_info=True)
 
     sent_any = False
     changed = False
     export_ok: bool | None = None
     daily_sent, daily_changed = maybe_send_daily_report(
-        state, now_dt, results, market, portfolio_notes, config, review_notes
+        state, now_dt, results, market, portfolio_notes, config, review_notes,
+        research_notes=research_notes,
     )
     if daily_sent:
         sent_any = True
         if not config.dry_run:
             arm_approved_plans(results, config, now_dt)
             export_ok = export_dashboard(
-                results, market, config, now_dt, portfolio_notes, review_notes
+                results, market, config, now_dt, portfolio_notes, review_notes,
+                research_notes=research_notes,
             )
     if daily_changed:
         changed = True
@@ -259,6 +270,7 @@ def maybe_send_daily_report(
     portfolio_notes,
     config: AppConfig,
     review_notes=None,
+    research_notes=None,
 ) -> tuple[bool, bool]:
     if not config.force_daily_report and not daily_report_due(
         now_dt, config.send_hour, config.send_minute, config.send_window_minutes
@@ -269,7 +281,10 @@ def maybe_send_daily_report(
         logger.info("Daily report skipped: already sent today.")
         return False, False
 
-    subject, body = compose_daily_report(results, market, config, now_dt, portfolio_notes, review_notes)
+    subject, body = compose_daily_report(
+        results, market, config, now_dt, portfolio_notes, review_notes,
+        research_notes=research_notes,
+    )
     try:
         html_body = compose_daily_report_html(results, market, config, now_dt, portfolio_notes, review_notes)
     except Exception:

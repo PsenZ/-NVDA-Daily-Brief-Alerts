@@ -51,6 +51,7 @@
  "portfolio_notes": [
   "Neutral market regime caps approved trades to 3."
  ],
+ "research_notes": {},
  "results": [
   {
    "action": "BUY_TRIGGER",
@@ -854,7 +855,7 @@
   "setup_type:breakout_entry avg 5D alpha +1.20% over 4 resolved decision(s). (t=+2.10, n=4: not significant)"
  ],
  "sample": true,
- "schema_version": 3,
+ "schema_version": 4,
  "summary": {
   "approved": 1,
   "deferred": 1,
