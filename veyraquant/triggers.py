@@ -92,6 +92,139 @@ def run_intraday_check(
     return 0
 
 
+def run_premarket_briefing(
+    config: AppConfig | None = None,
+    close_fetcher: Callable[[str], Optional[float]] | None = None,
+    now_et: datetime | None = None,
+) -> int:
+    """Email a pre-market readiness digest for armed plans.
+
+    This is NOT a trigger check: it never reads extended-hours quotes and
+    never changes plan status. It reports, per active plan, how far the
+    last COMPLETED daily close sits from the frozen entry zone and stop -
+    so you walk into the open knowing which plans are near action. Runs
+    once before the open; disabled with PREMARKET_BRIEFING_ENABLED=false.
+    """
+    config = config or AppConfig.from_env()
+    now_et = now_et or now_us_eastern()
+    if not getattr(config, "premarket_briefing_enabled", True):
+        logger.info("Pre-market briefing disabled.")
+        return 0
+    # DST guard: the workflow fires at both 13:00 and 14:00 UTC to cover
+    # EDT/EST, but only one of those is 09:00 ET on any given day. Send
+    # only in the 9:00-9:29 ET window so exactly one digest goes out.
+    if now_et.weekday() >= 5 or now_et.hour != 9 or now_et.minute >= 30:
+        logger.info("Pre-market briefing skipped: not in the 09:00-09:29 ET window.")
+        return 0
+    path = getattr(config, "armed_plans_path", None)
+    if not path:
+        return 0
+
+    plans = active_plans(load_plans(path))
+    if not plans:
+        logger.info("Pre-market briefing: no armed plans.")
+        return 0
+
+    fetch = close_fetcher or _latest_daily_close
+    rows: list[dict[str, Any]] = []
+    for plan in plans:
+        close = fetch(plan.get("symbol", ""))
+        rows.append(_premarket_row(plan, close))
+    if not rows:
+        return 0
+
+    subject, body = compose_premarket_briefing(rows, now_et)
+    if config.dry_run:
+        print(subject)
+        print(body)
+    else:
+        send_email(config.smtp, subject, body)
+    logger.info("Pre-market briefing sent for %d armed plan(s).", len(rows))
+    return 0
+
+
+def _premarket_row(plan: dict[str, Any], close: Optional[float]) -> dict[str, Any]:
+    entry_low = _as_float(plan.get("entry_low"))
+    entry_high = _as_float(plan.get("entry_high"))
+    stop = _as_float(plan.get("stop_price"))
+    row = {
+        "symbol": plan.get("symbol", "?"),
+        "plan_kind": plan.get("plan_kind", ""),
+        "entry_low": entry_low,
+        "entry_high": entry_high,
+        "stop_price": stop,
+        "prev_close": close,
+        "dist_to_entry_pct": None,
+        "in_zone": False,
+        "below_stop": False,
+    }
+    if close is None or close <= 0:
+        return row
+    if entry_low is not None and entry_high is not None:
+        if entry_low <= close <= entry_high:
+            row["in_zone"] = True
+            row["dist_to_entry_pct"] = 0.0
+        else:
+            nearest = entry_low if close < entry_low else entry_high
+            row["dist_to_entry_pct"] = round((nearest - close) / close * 100, 2)
+    if stop is not None and close <= stop:
+        row["below_stop"] = True
+    return row
+
+
+def compose_premarket_briefing(
+    rows: list[dict[str, Any]], now_et: datetime
+) -> tuple[str, str]:
+    stamp = now_et.strftime("%Y-%m-%d %H:%M ET")
+    near = [r for r in rows if r["dist_to_entry_pct"] is not None and abs(r["dist_to_entry_pct"]) <= 1.0]
+    subject = f"Pre-market readiness: {len(rows)} armed plan(s), {len(near)} near trigger ({stamp})"
+    lines = [
+        f"Pre-market readiness digest ({stamp})",
+        "",
+        "Distance from the last completed daily close to each frozen plan.",
+        "This is NOT a trigger - extended-hours prices are not used. The",
+        "intraday job checks live levels once the regular session opens.",
+        "",
+    ]
+    for row in sorted(rows, key=lambda r: abs(r["dist_to_entry_pct"]) if r["dist_to_entry_pct"] is not None else 1e9):
+        symbol = row["symbol"]
+        if row["prev_close"] is None:
+            lines.append(f"{symbol}: previous close unavailable.")
+            continue
+        if row["below_stop"]:
+            state = "AT/BELOW STOP on the prior close - the setup may be breaking down"
+        elif row["in_zone"]:
+            state = "INSIDE the entry zone on the prior close - watch the open closely"
+        else:
+            pct = row["dist_to_entry_pct"]
+            direction = "above" if pct < 0 else "below"
+            state = f"{abs(pct):.2f}% {direction} the entry zone"
+        lines.append(
+            f"{symbol} ({row['plan_kind']}): prev close ${row['prev_close']:.2f} -> {state}"
+        )
+        lines.append(
+            f"   entry ${_fmt(row['entry_low'])}-${_fmt(row['entry_high'])} | stop ${_fmt(row['stop_price'])}"
+        )
+    lines += ["", "No automatic orders. Review before acting."]
+    return subject, "\n".join(lines)
+
+
+def _latest_daily_close(symbol: str) -> Optional[float]:
+    """Last COMPLETED daily close via yfinance (trimmed of any forming bar)."""
+    try:
+        import yfinance as yf
+
+        from .data import trim_incomplete_bars
+
+        history = yf.Ticker(symbol).history(period="10d", interval="1d")
+        history = trim_incomplete_bars(history, "1d")
+        if history is not None and not history.empty:
+            return float(history["Close"].iloc[-1])
+    except Exception:
+        logger.warning("%s: pre-market close fetch failed.", symbol, exc_info=True)
+    return None
+
+
 def _mirror_to_dashboard(config: Any, plans: list[dict[str, Any]]) -> None:
     export_dir = getattr(config, "export_dir", "")
     if not export_dir:

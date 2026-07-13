@@ -136,3 +136,94 @@ def test_missing_price_leaves_plan_armed_for_retry(tmp_path):
     run_intraday_check(config, price_fetcher=lambda s: None, now_et=RTH)
 
     assert load_plans(config.armed_plans_path)[0]["status"] == "armed"
+
+
+# --- pre-market readiness digest (never uses extended-hours quotes) ---
+
+PREMARKET_NOW = datetime(2026, 7, 10, 9, 5, tzinfo=US_EASTERN_TZ)  # Fri, before open
+
+
+def test_premarket_digest_reports_distance_never_fires(tmp_path, capsys):
+    config = make_config(tmp_path)
+    config.premarket_briefing_enabled = True
+    save_plans(config.armed_plans_path, [
+        make_plan(symbol="NVDA", entry_low=100.0, entry_high=101.0, stop_price=96.0),
+        make_plan(symbol="AMD", entry_low=50.0, entry_high=51.0, stop_price=48.0),
+    ])
+    # Prior closes: NVDA 0.5% below its zone, AMD sitting inside its zone.
+    closes = {"NVDA": 99.5, "AMD": 50.5}
+
+    from veyraquant.triggers import run_premarket_briefing
+    run_premarket_briefing(config, close_fetcher=lambda s: closes[s], now_et=PREMARKET_NOW)
+
+    out = capsys.readouterr().out
+    assert "Pre-market readiness" in out
+    assert "NVDA" in out and "AMD" in out
+    assert "INSIDE the entry zone" in out          # AMD
+    assert "below the entry zone" in out           # NVDA 0.5% below
+    # Plan status is NEVER changed by the briefing.
+    plans = load_plans(config.armed_plans_path)
+    assert all(p["status"] == "armed" for p in plans)
+
+
+def test_premarket_row_computes_distance_and_flags():
+    from veyraquant.triggers import _premarket_row
+
+    plan = make_plan(entry_low=100.0, entry_high=101.0, stop_price=96.0)
+    assert _premarket_row(plan, 98.0)["dist_to_entry_pct"] == round((100.0 - 98.0) / 98.0 * 100, 2)
+    assert _premarket_row(plan, 100.5)["in_zone"] is True
+    assert _premarket_row(plan, 100.5)["dist_to_entry_pct"] == 0.0
+    assert _premarket_row(plan, 95.0)["below_stop"] is True
+    assert _premarket_row(plan, None)["dist_to_entry_pct"] is None   # no close, no guess
+
+
+def test_premarket_disabled_or_no_plans_sends_nothing(tmp_path, capsys):
+    from veyraquant.triggers import run_premarket_briefing
+
+    off = make_config(tmp_path)
+    off.premarket_briefing_enabled = False
+    save_plans(off.armed_plans_path, [make_plan()])
+    run_premarket_briefing(off, close_fetcher=lambda s: 100.0, now_et=PREMARKET_NOW)
+    assert capsys.readouterr().out == ""
+
+    on_empty = make_config(tmp_path)
+    on_empty.premarket_briefing_enabled = True
+    save_plans(on_empty.armed_plans_path, [])
+    run_premarket_briefing(on_empty, close_fetcher=lambda s: 100.0, now_et=PREMARKET_NOW)
+    assert capsys.readouterr().out == ""
+
+
+def test_premarket_real_send_uses_emailer(tmp_path, monkeypatch):
+    from veyraquant.triggers import run_premarket_briefing
+
+    sent = []
+    monkeypatch.setattr("veyraquant.triggers.send_email", lambda smtp, subject, body: sent.append(subject))
+    config = make_config(tmp_path, dry_run=False)
+    config.premarket_briefing_enabled = True
+    save_plans(config.armed_plans_path, [make_plan(symbol="NVDA")])
+
+    run_premarket_briefing(config, close_fetcher=lambda s: 100.5, now_et=PREMARKET_NOW)
+    assert len(sent) == 1 and "readiness" in sent[0]
+
+
+def test_premarket_only_sends_in_the_9am_et_window(tmp_path, capsys):
+    from veyraquant.triggers import run_premarket_briefing
+
+    config = make_config(tmp_path)
+    config.premarket_briefing_enabled = True
+    save_plans(config.armed_plans_path, [make_plan()])
+
+    # 14:00 UTC on a summer (EDT) day = 10:00 ET -> outside the window, skip
+    # (the 13:00 UTC run that day is 09:00 ET and would be the one that sends).
+    ten_et = datetime(2026, 7, 10, 10, 0, tzinfo=US_EASTERN_TZ)
+    run_premarket_briefing(config, close_fetcher=lambda s: 100.5, now_et=ten_et)
+    assert capsys.readouterr().out == ""
+
+    # Weekend never sends.
+    sat = datetime(2026, 7, 11, 9, 5, tzinfo=US_EASTERN_TZ)
+    run_premarket_briefing(config, close_fetcher=lambda s: 100.5, now_et=sat)
+    assert capsys.readouterr().out == ""
+
+    # 09:05 ET on a weekday sends.
+    run_premarket_briefing(config, close_fetcher=lambda s: 100.5, now_et=PREMARKET_NOW)
+    assert "Pre-market readiness" in capsys.readouterr().out

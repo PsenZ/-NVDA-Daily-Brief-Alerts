@@ -2,11 +2,12 @@ name: VeyraQuant Intraday Triggers
 
 on:
   schedule:
-    # Every 10 minutes across US regular hours (13:30-20:00 UTC in EDT,
-    # 14:30-21:00 UTC in EST). Offset minutes avoid the congested :00 slots.
-    # The Python job gates precisely on 9:30-16:00 ET and exits in seconds
-    # when there are no armed plans, so off-hours runs are nearly free.
-    - cron: "4,14,24,34,44,54 13-21 * * 1-5"
+    # Every 5 minutes across US regular hours (13:30-20:00 UTC in EDT,
+    # 14:30-21:00 UTC in EST). Offset by 2 to avoid the congested :00/:05
+    # slots. The Python job gates precisely on 9:30-16:00 ET and exits in
+    # seconds when there are no armed plans, so off-hours runs are nearly
+    # free. Faster cadence cuts open-gap trigger latency from ~10 to ~5 min.
+    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 13-21 * * 1-5"
   workflow_dispatch:
     inputs:
       dry_run:

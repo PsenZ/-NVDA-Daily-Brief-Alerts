@@ -216,6 +216,11 @@ class AppConfig:
     earnings_blackout_days: int = 3
     armed_plans_path: str = os.path.join("state", "armed_plans.json")
     armed_plan_valid_days: int = 2
+    # Pre-market readiness digest: emails how close each armed plan sits to
+    # its trigger, measured from the previous COMPLETED daily close (not an
+    # unreliable extended-hours quote). Informational only - it never fires
+    # a trigger or invalidation.
+    premarket_briefing_enabled: bool = True
     backtest_cost_bps: float = 10.0
     export_dir: str = os.path.join("docs", "data")
     instruments_path: str = os.path.join("config", "instruments.json")
@@ -306,6 +311,7 @@ class AppConfig:
                 "ARMED_PLANS_PATH", os.path.join("state", "armed_plans.json")
             ),
             armed_plan_valid_days=_int_env("ARMED_PLAN_VALID_DAYS", 2),
+            premarket_briefing_enabled=_bool_env("PREMARKET_BRIEFING_ENABLED", True),
             backtest_cost_bps=_float_env("BACKTEST_COST_BPS", 10.0),
             export_dir=os.getenv("EXPORT_DIR", os.path.join("docs", "data")),
             instruments_path=os.getenv(
