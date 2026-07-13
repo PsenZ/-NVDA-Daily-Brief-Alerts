@@ -282,8 +282,7 @@ def maybe_send_daily_report(
         return False, False
 
     subject, body = compose_daily_report(
-        results, market, config, now_dt, portfolio_notes, review_notes,
-        research_notes=research_notes,
+        results, market, config, now_dt, portfolio_notes, review_notes, research_notes
     )
     try:
         html_body = compose_daily_report_html(results, market, config, now_dt, portfolio_notes, review_notes)
