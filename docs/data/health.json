@@ -1,11 +1,11 @@
 {
  "alerts_sent": 0,
  "cache_hit_rate_pct": 0.0,
- "data_fetch_seconds": 9.91,
- "duration_seconds": 9.95,
- "email_sent": false,
- "export_ok": null,
- "finished_at": "2026-08-07T01:03:44.024640+00:00",
+ "data_fetch_seconds": 11.52,
+ "duration_seconds": 22.01,
+ "email_sent": true,
+ "export_ok": true,
+ "finished_at": "2026-08-07T21:16:48.771707+00:00",
  "health_schema_version": 1,
  "intraday_heartbeat": {
   "checked_plans": 3,
@@ -16,9 +16,9 @@
   "started_at": "2026-07-12T14:40:03+00:00",
   "transitions": 1
  },
- "run_id": "2026-08-07T01:03:34.070109+00:00",
+ "run_id": "2026-08-07T21:16:26.762619+00:00",
  "run_kind": "daily",
- "started_at": "2026-08-07T01:03:34.070109+00:00",
+ "started_at": "2026-08-07T21:16:26.762619+00:00",
  "symbols": [
   {
    "data_quality_level": "HIGH",
@@ -45,7 +45,7 @@
    "data_quality_level": "HIGH",
    "intraday_freshness": "live",
    "price_freshness": "live",
-   "symbol": "NOK",
+   "symbol": "TSLA",
    "warnings": 0
   },
   {
@@ -59,7 +59,7 @@
    "data_quality_level": "HIGH",
    "intraday_freshness": "live",
    "price_freshness": "live",
-   "symbol": "TSLA",
+   "symbol": "NOK",
    "warnings": 0
   },
   {
