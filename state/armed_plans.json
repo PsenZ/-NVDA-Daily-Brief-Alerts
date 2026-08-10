@@ -1,0 +1,23 @@
+{
+  "plans": [
+    {
+      "created_date": "2026-08-10",
+      "entry_high": 704.3416,
+      "entry_low": 697.2504,
+      "expires_date": "2026-08-12",
+      "max_loss_pct": 0.4,
+      "note": "Approved as the best-ranked mega growth setup within risk budget.",
+      "plan_kind": "add",
+      "position_pct": 10.0,
+      "score": 100,
+      "setup_type": "pullback_add",
+      "status": "armed",
+      "stop_price": 672.4314,
+      "symbol": "QQQ",
+      "target1": 743.3429,
+      "target2": 771.7076,
+      "triggered_at": null
+    }
+  ],
+  "version": 1
+}
