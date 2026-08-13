@@ -11,7 +11,7 @@
       "position_pct": 10.0,
       "score": 100,
       "setup_type": "pullback_add",
-      "status": "armed",
+      "status": "expired",
       "stop_price": 672.4314,
       "symbol": "QQQ",
       "target1": 743.3429,
