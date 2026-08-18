@@ -1,24 +1,6 @@
 {
  "plans": [
   {
-   "created_date": "2026-08-10",
-   "entry_high": 704.3416,
-   "entry_low": 697.2504,
-   "expires_date": "2026-08-12",
-   "max_loss_pct": 0.4,
-   "note": "Approved as the best-ranked mega growth setup within risk budget.",
-   "plan_kind": "add",
-   "position_pct": 10.0,
-   "score": 100,
-   "setup_type": "pullback_add",
-   "status": "expired",
-   "stop_price": 672.4314,
-   "symbol": "QQQ",
-   "target1": 743.3429,
-   "target2": 771.7076,
-   "triggered_at": null
-  },
-  {
    "created_date": "2026-08-16",
    "entry_high": 10.9163,
    "entry_low": 10.76,
@@ -37,21 +19,21 @@
    "triggered_at": null
   },
   {
-   "created_date": "2026-08-16",
-   "entry_high": 522.4788,
-   "entry_low": 514.39,
-   "expires_date": "2026-08-18",
+   "created_date": "2026-08-18",
+   "entry_high": 492.1308,
+   "entry_low": 484.39,
+   "expires_date": "2026-08-20",
    "max_loss_pct": 0.5,
    "note": "Approved as the best-ranked semiconductor setup within risk budget.",
    "plan_kind": "buy",
-   "position_pct": 4.01,
-   "score": 93,
+   "position_pct": 3.94,
+   "score": 68,
    "setup_type": "breakout_entry",
    "status": "armed",
-   "stop_price": 453.7245,
+   "stop_price": 426.3341,
    "symbol": "AMD",
-   "target1": 615.4992,
-   "target2": 680.2091,
+   "target1": 581.1498,
+   "target2": 643.0761,
    "triggered_at": null
   }
  ]
