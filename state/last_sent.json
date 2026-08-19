@@ -216,17 +216,18 @@
     "TSLA": {
       "breakout_entry": {
         "channel": "entry",
+        "identity_hash": "210f63fc219e",
         "plan": {
-          "entry_zone": "$400.49 - $404.69",
+          "entry_zone": "$351.12 - $354.46",
           "max_loss_pct": 0.5,
-          "position_pct": 5.98,
-          "stop": "$368.96",
-          "targets": "$453.05 / $486.69"
+          "position_pct": 6.6,
+          "stop": "$326.06",
+          "targets": "$392.89 / $419.63"
         },
-        "reason": "signal_changed",
-        "score": 74,
-        "sent_at": "2026-06-22T17:20:20.315399+10:00",
-        "signal_hash": "06a26f8e8a59"
+        "reason": "signal_materially_changed",
+        "score": 83,
+        "sent_at": "2026-08-20T06:56:10.338736+10:00",
+        "signal_hash": "199fb12c6312"
       },
       "pullback_add": {
         "channel": "entry",
