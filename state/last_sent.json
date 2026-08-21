@@ -120,6 +120,21 @@
         "score": 100,
         "sent_at": "2026-08-15T06:58:01.491677+10:00",
         "signal_hash": "7f5f1aca1812"
+      },
+      "pullback_add": {
+        "channel": "entry",
+        "identity_hash": "7a13ebd61dbe",
+        "plan": {
+          "entry_zone": "$9.57 - $9.86",
+          "max_loss_pct": 0.5,
+          "position_pct": 4.22,
+          "stop": "$8.57",
+          "targets": "$11.44 / $12.59"
+        },
+        "reason": "new_alert",
+        "score": 100,
+        "sent_at": "2026-08-22T06:52:29.519691+10:00",
+        "signal_hash": "9ee8c3f6c4c0"
       }
     },
     "NVDA": {
