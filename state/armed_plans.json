@@ -1,24 +1,6 @@
 {
   "plans": [
     {
-      "created_date": "2026-08-16",
-      "entry_high": 10.9163,
-      "entry_low": 10.76,
-      "expires_date": "2026-08-18",
-      "max_loss_pct": 0.5,
-      "note": "Approved as the best-ranked general setup within risk budget.",
-      "plan_kind": "buy",
-      "position_pct": 4.33,
-      "score": 100,
-      "setup_type": "breakout_entry",
-      "status": "armed",
-      "stop_price": 9.588,
-      "symbol": "NOK",
-      "target1": 12.7134,
-      "target2": 13.9635,
-      "triggered_at": null
-    },
-    {
       "created_date": "2026-08-18",
       "entry_high": 492.1308,
       "entry_low": 484.39,
@@ -52,6 +34,24 @@
       "symbol": "TSLA",
       "target1": 392.8938,
       "target2": 419.629,
+      "triggered_at": null
+    },
+    {
+      "created_date": "2026-08-21",
+      "entry_high": 9.8623,
+      "entry_low": 9.5747,
+      "expires_date": "2026-08-25",
+      "max_loss_pct": 0.5,
+      "note": "Approved as a higher-conviction general idea, but keep sizing disciplined because validation warnings remain.",
+      "plan_kind": "add",
+      "position_pct": 4.22,
+      "score": 100,
+      "setup_type": "pullback_add",
+      "status": "armed",
+      "stop_price": 8.5681,
+      "symbol": "NOK",
+      "target1": 11.4441,
+      "target2": 12.5945,
       "triggered_at": null
     }
   ],
