@@ -37,7 +37,7 @@
       "triggered_at": null
     },
     {
-      "created_date": "2026-08-21",
+      "created_date": "2026-08-22",
       "entry_high": 9.8623,
       "entry_low": 9.5747,
       "expires_date": "2026-08-25",
@@ -51,7 +51,7 @@
       "stop_price": 8.5681,
       "symbol": "NOK",
       "target1": 11.4441,
-      "target2": 12.5945,
+      "target2": 12.5946,
       "triggered_at": null
     }
   ],
