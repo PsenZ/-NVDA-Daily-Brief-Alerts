@@ -1,24 +1,6 @@
 {
  "plans": [
   {
-   "created_date": "2026-08-18",
-   "entry_high": 492.1308,
-   "entry_low": 484.39,
-   "expires_date": "2026-08-20",
-   "max_loss_pct": 0.5,
-   "note": "Approved as the best-ranked semiconductor setup within risk budget.",
-   "plan_kind": "buy",
-   "position_pct": 3.94,
-   "score": 68,
-   "setup_type": "breakout_entry",
-   "status": "armed",
-   "stop_price": 426.3341,
-   "symbol": "AMD",
-   "target1": 581.1498,
-   "target2": 643.0761,
-   "triggered_at": null
-  },
-  {
    "created_date": "2026-08-19",
    "entry_high": 354.4619,
    "entry_low": 351.12,
@@ -29,7 +11,7 @@
    "position_pct": 6.6,
    "score": 83,
    "setup_type": "breakout_entry",
-   "status": "armed",
+   "status": "expired",
    "stop_price": 326.0557,
    "symbol": "TSLA",
    "target1": 392.8938,
@@ -47,7 +29,7 @@
    "position_pct": 4.22,
    "score": 100,
    "setup_type": "pullback_add",
-   "status": "armed",
+   "status": "expired",
    "stop_price": 8.5681,
    "symbol": "NOK",
    "target1": 11.4441,
