@@ -1,24 +1,6 @@
 {
   "plans": [
     {
-      "created_date": "2026-08-19",
-      "entry_high": 354.4619,
-      "entry_low": 351.12,
-      "expires_date": "2026-08-21",
-      "max_loss_pct": 0.5,
-      "note": "Approved as the best-ranked auto growth setup within risk budget.",
-      "plan_kind": "buy",
-      "position_pct": 6.6,
-      "score": 83,
-      "setup_type": "breakout_entry",
-      "status": "expired",
-      "stop_price": 326.0557,
-      "symbol": "TSLA",
-      "target1": 392.8938,
-      "target2": 419.629,
-      "triggered_at": null
-    },
-    {
       "created_date": "2026-08-23",
       "entry_high": 9.8623,
       "entry_low": 9.5747,
@@ -34,6 +16,24 @@
       "symbol": "NOK",
       "target1": 11.4441,
       "target2": 12.5946,
+      "triggered_at": null
+    },
+    {
+      "created_date": "2026-08-28",
+      "entry_high": 950.9392,
+      "entry_low": 935.39,
+      "expires_date": "2026-09-01",
+      "max_loss_pct": 0.5,
+      "note": "Approved as the best-ranked semiconductor setup within risk budget.",
+      "plan_kind": "buy",
+      "position_pct": 3.79,
+      "score": 97,
+      "setup_type": "breakout_entry",
+      "status": "armed",
+      "stop_price": 818.7711,
+      "symbol": "MU",
+      "target1": 1129.7548,
+      "target2": 1254.1483,
       "triggered_at": null
     }
   ],

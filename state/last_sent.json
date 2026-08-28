@@ -78,17 +78,18 @@
     "MU": {
       "breakout_entry": {
         "channel": "entry",
+        "identity_hash": "5c07ac9b92e2",
         "plan": {
-          "entry_zone": "$1065.19 - $1083.99",
+          "entry_zone": "$935.39 - $950.94",
           "max_loss_pct": 0.5,
-          "position_pct": 3.57,
-          "stop": "$924.20",
-          "targets": "$1300.18 / $1450.57"
+          "position_pct": 3.79,
+          "stop": "$818.77",
+          "targets": "$1129.75 / $1254.15"
         },
-        "reason": "signal_changed",
-        "score": 100,
-        "sent_at": "2026-06-15T23:50:36.811374+10:00",
-        "signal_hash": "4c0f158e9c12"
+        "reason": "signal_materially_changed",
+        "score": 97,
+        "sent_at": "2026-08-28T14:26:18.620207+10:00",
+        "signal_hash": "4ba2edf1bfb4"
       },
       "pullback_add": {
         "channel": "entry",
@@ -261,8 +262,8 @@
     }
   },
   "daily": {
-    "date": "2026-08-27",
-    "sent_at": "2026-08-27T10:00:16.411303+10:00"
+    "date": "2026-08-28",
+    "sent_at": "2026-08-28T14:26:18.620207+10:00"
   },
   "version": 2
 }
