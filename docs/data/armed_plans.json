@@ -1,24 +1,6 @@
 {
  "plans": [
   {
-   "created_date": "2026-08-23",
-   "entry_high": 9.8623,
-   "entry_low": 9.5747,
-   "expires_date": "2026-08-25",
-   "max_loss_pct": 0.5,
-   "note": "Approved as a higher-conviction general idea, but keep sizing disciplined because validation warnings remain.",
-   "plan_kind": "add",
-   "position_pct": 4.22,
-   "score": 100,
-   "setup_type": "pullback_add",
-   "status": "expired",
-   "stop_price": 8.5681,
-   "symbol": "NOK",
-   "target1": 11.4441,
-   "target2": 12.5946,
-   "triggered_at": null
-  },
-  {
    "created_date": "2026-08-28",
    "entry_high": 950.9392,
    "entry_low": 935.39,
