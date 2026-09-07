@@ -1,11 +1,11 @@
 {
- "alerts_sent": 0,
+ "alerts_sent": 1,
  "cache_hit_rate_pct": 0.0,
- "data_fetch_seconds": 9.59,
- "duration_seconds": 16.13,
+ "data_fetch_seconds": 12.11,
+ "duration_seconds": 26.28,
  "email_sent": true,
  "export_ok": true,
- "finished_at": "2026-09-06T22:15:24.605730+00:00",
+ "finished_at": "2026-09-07T22:58:25.738066+00:00",
  "health_schema_version": 1,
  "intraday_heartbeat": {
   "checked_plans": 3,
@@ -16,9 +16,9 @@
   "started_at": "2026-07-12T14:40:03+00:00",
   "transitions": 1
  },
- "run_id": "2026-09-06T22:15:08.475393+00:00",
+ "run_id": "2026-09-07T22:57:59.460352+00:00",
  "run_kind": "daily",
- "started_at": "2026-09-06T22:15:08.475393+00:00",
+ "started_at": "2026-09-07T22:57:59.460352+00:00",
  "symbols": [
   {
    "data_quality_level": "HIGH",

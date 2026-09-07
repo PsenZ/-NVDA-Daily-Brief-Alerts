@@ -1,10 +1,10 @@
 {
  "plans": [
   {
-   "created_date": "2026-09-06",
+   "created_date": "2026-09-07",
    "entry_high": 483.1973,
    "entry_low": 477.57,
-   "expires_date": "2026-09-08",
+   "expires_date": "2026-09-09",
    "max_loss_pct": 0.5,
    "note": "Approved as the best-ranked semiconductor setup within risk budget.",
    "plan_kind": "buy",
